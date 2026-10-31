@@ -16,7 +16,7 @@ namespace NetProbe
 {
     public partial class MainForm : Form
     {
-        public const string Version = "3.5.1";
+        public const string Version = "3.5.2";
         Settings st;
         readonly ChannelMonitor monVpn = new ChannelMonitor("vpn"), monDir = new ChannelMonitor("direct");
         volatile Prober pVpn, pDir;
@@ -1155,7 +1155,12 @@ namespace NetProbe
             if (ico == null) try { ico = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
             if (ico == null) return;
             Icon = ico;
-            try { var old = appIconBmp; using (var i64 = new Icon(ico, 64, 64)) appIconBmp = i64.ToBitmap(); if (old != null) old.Dispose(); } catch { appIconBmp = ico.ToBitmap(); }
+            try
+            {
+                var bitmap = AppIconArt.Load(st.AppIconPath, ico, 64);
+                var old = appIconBmp; appIconBmp = bitmap; if (old != null) old.Dispose();
+            }
+            catch { appIconBmp = SystemIcons.Application.ToBitmap(); }
             // иконка отдельным файлом в папке приложения
             try { string f = Path.Combine(Settings.Root, "RouteX.ico"); if (!File.Exists(f)) using (var src = Icon.ExtractAssociatedIcon(Application.ExecutablePath)) using (var fs = File.Create(f)) src.Save(fs); } catch { }
             if (tray != null) UpdateTray();

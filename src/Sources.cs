@@ -264,6 +264,7 @@ namespace NetProbe
             }
             if (cbRunMode != null && !cbRunMode.IsDisposed && cbRunMode.SelectedIndex != st.Mode) cbRunMode.SelectedIndex = st.Mode;
             UpdateTopButtons();
+            ApplyTunLockUi(TunSettingsLocked);
             UpdateEngineLabel();
             if (listCards != null) foreach (var lc in listCards) if (lc != null && !lc.IsDisposed) lc.Box.Invalidate(); // серые домены зависят от источника
             if (miModes != null) for (int i = 0; i < 3; i++) miModes[i].Checked = i == st.Mode;

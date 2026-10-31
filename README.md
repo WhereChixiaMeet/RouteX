@@ -1,6 +1,8 @@
 # RouteX
 *(formerly NetProbe)*
 
+3.5.2: the built-in VPN probe is displayed as **RouteX.Checker** with the app icon; its internal process identity remains unchanged. Routing lists show an inline lock explanation and disabled editing controls while the VPN is active. This release publishes only **RouteX.exe**.
+
 **Settings → Engine → TUN stack** selects `mixed` or `gvisor` for Configs/subscription TUN. Disconnect before changing and reconnect to apply. Existing installs keep `mixed`.
 
 3.5.1 automatically migrates the main executable to **RouteX.exe** in the existing installation directory. The transition release includes an identical NetProbe.exe bridge for older updaters; both enter the same migration. Data folders and internal network identities remain unchanged. The old launcher is backed up and removed after startup and Windows integration succeed; failed integration retains it. See [migration notes](RELEASE-3.5.1.md).

@@ -18,6 +18,9 @@ namespace NetProbe
         bool dragThumb; int dragY, dragTop;
         public bool MultiSelect, ShowIcons;
         public Func<string, string> RightText;
+        // Presentation only: Items and selection/copy/drag values keep their original process names.
+        public Func<string, string> DisplayText;
+        public Func<string, Image> ItemIcon;
         public Func<string, bool> BoldItem;
         // запись, которая не работает в этом списке (например, домен в списке приложений): серым + подсказка с причиной
         public Func<string, string> DimReason;
@@ -203,6 +206,7 @@ namespace NetProbe
                 if (dim) fg = Theme.Dim;
                 int x = Theme.S(8);
                 string text = Items[i];
+                Image itemIcon = ItemIcon != null ? ItemIcon(Items[i]) : null;
                 // «приложение|домен» — домен под приложением: отступ и значок глобуса
                 if (AppLists.IsChild(text))
                 {
@@ -211,14 +215,15 @@ namespace NetProbe
                     x += Theme.S(24);
                     text = AppLists.ChildOf(text);
                 }
-                else if (ShowIcons)
+                else if (ShowIcons || itemIcon != null)
                 {
                     int isz = Theme.S(16);
-                    var ico = AppIcons.Get(Items[i], this);
+                    var ico = itemIcon ?? AppIcons.Get(Items[i], this);
                     if (ico != null) g.DrawImage(ico, x, r.Y + (rh - isz) / 2, isz, isz);
                     else TextRenderer.DrawText(g, "", Theme.Icons, new Rectangle(x, r.Y, isz, rh), Theme.Dim, TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter);
                     x += isz + Theme.S(8);
                 }
+                if (DisplayText != null) text = DisplayText(Items[i]) ?? text;
                 string right = RightText != null ? RightText(Items[i]) : null;
                 int rw = string.IsNullOrEmpty(right) ? 0 : TextRenderer.MeasureText(right, Theme.Small).Width + Theme.S(8);
                 bool bold = BoldItem != null && BoldItem(Items[i]);

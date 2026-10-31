@@ -28,6 +28,7 @@ class PowerSliderPreview
             string output = Path.GetFullPath(args[0]); Directory.CreateDirectory(output);
             Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
             var settings = new Settings { Lang = "en", Theme = 0, Accent = "#ef4444", AutoStartMonitor = false, SpeedOn = false, ShowWidget = false, Autorun = false, DomainsMigrated = true, LogToFile = false };
+            settings.AppIconPath = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "..", "..", "src", "app.ico"));
             settings.Save(); MainForm.ShotsDir = output;
             using (var form = new PreviewForm())
             {
@@ -45,7 +46,41 @@ class PowerSliderPreview
                     Check(vpn.Size == new Size(150,36) && dpi.Size == vpn.Size && vpn.Top == dpi.Top && vpn.Left-dpi.Right == 8, "header geometry preserved");
                 }
                 using (var bmp = new Bitmap(form.Width, form.Height)) { form.DrawToBitmap(bmp, new Rectangle(Point.Empty,bmp.Size)); bmp.Save(Path.Combine(output,"routex-routing-preview.png")); }
+                var lists = (ListCard[])Field("listCards").GetValue(form);
+                var include = lists.First(c => c.Box.Items.Contains(ListCard.BuiltIn));
+                Check(include.Box.DisplayText(ListCard.BuiltIn) == "RouteX.Checker", "checker has the friendly display label");
+                Check(include.Box.Items.Contains("netprobe-vpn.exe") && !include.Box.Items.Contains("RouteX.Checker"), "checker keeps its original routing identity");
+                Check(include.Box.ItemIcon(ListCard.BuiltIn) != null, "checker displays the application icon");
+                Check(include.Box.DisplayText("chrome.exe") == null && include.Box.ItemIcon("chrome.exe") == null, "other application rows retain normal rendering");
+                using (var bmp = new Bitmap(form.Width, form.Height)) { form.DrawToBitmap(bmp,new Rectangle(Point.Empty,bmp.Size));bmp.Save(Path.Combine(output,"routex-checker-preview.png")); }
+                // Exercise the production presentation method without starting a real VPN.
+                var applyLock=typeof(MainForm).GetMethod("ApplyTunLockUi",BindingFlags.Instance|BindingFlags.NonPublic);
+                applyLock.Invoke(form,new object[]{true});
+                Check(lists.All(c=>!c.BAdd.Enabled&&!c.BDel.Enabled&&!c.BPaste.Enabled&&!c.Box.AllowDrop),"locked lists disable editing buttons and incoming drops");
+                Check(lists.All(c=>c.Box.Enabled),"locked lists remain readable and selectable");
+                Check(lists.All(c=>c.Box.DragItems(new System.Collections.Generic.List<string>{"chrome.exe"}).Count==0),"locked lists cannot start outgoing drag operations");
+                Check(include.Box.CopyItems(new System.Collections.Generic.List<string>{"chrome.exe"}).Single()=="chrome.exe","locked lists still allow copying ordinary entries");
+                var hint=(Label)Field("lRouteHint").GetValue(form);
+                Check(hint.Text=="TUN settings are locked. Turn off VPN to edit.","locked lists display the inline English explanation");
+                var status=(StatusBoard)Field("board").GetValue(form);status.State="Connected";status.Lv=Level.Good;status.Line1="VPN active";status.Line2="Routing rules are read-only until disconnected";
+                foreach(var row in top){var vpn=(PowerSlider)row.GetType().GetField("Vpn").GetValue(row);vpn.Enabled=true;vpn.SetState(true,false,"VPN · ON");typeof(PowerSlider).GetField("position",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(vpn,1f);}
+                using(var bmp=new Bitmap(form.Width,form.Height)){form.DrawToBitmap(bmp,new Rectangle(Point.Empty,bmp.Size));bmp.Save(Path.Combine(output,"routex-locked-proposal.png"));}
+                applyLock.Invoke(form,new object[]{false});
+                Check(lists.All(c=>c.BAdd.Enabled&&c.BDel.Enabled&&c.BPaste.Enabled&&c.Box.AllowDrop),"disconnect restores editing buttons and drop targets");
+                Check(hint.Text!="TUN settings are locked. Turn off VPN to edit.","disconnect restores the ordinary routing hint");
                 form.Hide();
+            }
+            using(var embedded=AppIconArt.Load(null,SystemIcons.Application,64))
+            using(var custom=AppIconArt.Load(settings.AppIconPath,SystemIcons.Application,64))
+            {
+                bool same=true;int opaque=0,expected=0;
+                for(int y=0;y<64;y++)for(int x=0;x<64;x++)
+                {
+                    var pixel=embedded.GetPixel(x,y);if(pixel.ToArgb()!=custom.GetPixel(x,y).ToArgb())same=false;
+                    if(pixel.A>20){opaque++;if(pixel.R<=pixel.G+3&&pixel.G<=pixel.B+3)expected++;}
+                }
+                Check(same,"embedded app icon matches the original PNG frame in the custom ICO");
+                Check(opaque>500&&expected>opaque*.98,"app icon contains the expected blue/white artwork instead of pixel noise");
             }
             using (var board = new Bitmap(760, 410)) using (var g = Graphics.FromImage(board))
             {

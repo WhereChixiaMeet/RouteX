@@ -59,10 +59,13 @@ namespace NetProbe
         public string Key;
         public ThemedList Box;
         public const string BuiltIn = "netprobe-vpn.exe";
+        public System.Func<Image> CheckerIcon;
         public FlatButton BAdd, BDel, BPaste;
         public ListCard()
         {
             Box = new ThemedList { MultiSelect = true, RightText = n => n == BuiltIn ? Tr.Tx("встроено") : null };
+            Box.DisplayText = n => n == BuiltIn ? "RouteX.Checker" : null;
+            Box.ItemIcon = n => n == BuiltIn && CheckerIcon != null ? CheckerIcon() : null;
             BAdd = new FlatButton("") { Glyph = "", Width = Theme.S(30), Height = Theme.S(26) };
             BDel = new FlatButton("") { Glyph = "", Width = Theme.S(30), Height = Theme.S(26) };
             BPaste = new FlatButton("") { Glyph = "\uE77F", Width = Theme.S(30), Height = Theme.S(26) };
@@ -120,7 +123,25 @@ namespace NetProbe
         ThemedCheck cKill, cDnsTun, cAutoConnect;
         bool loadingConnect;
 
-        DarkCombo cbRunMode; Label lRouteHint;
+        DarkCombo cbRunMode; Label lRouteHint, lRouteLock;
+        bool tunLockShown;
+        const string TunLockMessage = "TUN settings are locked. Turn off VPN to edit.";
+        string NormalRouteHint { get { return Tx("DPI глобален: касается всего вне туннеля. Домены для DPI — на вкладке DPI  ·  Приоритет: «Строго VPN» > домен > приложение"); } }
+        void ApplyTunLockUi(bool locked)
+        {
+            if (listCards == null || lRouteHint == null || lRouteHint.IsDisposed) return;
+            foreach (var card in listCards)
+            {
+                if (card == null || card.IsDisposed) continue;
+                card.BAdd.Enabled = card.BDel.Enabled = card.BPaste.Enabled = !locked;
+                card.Box.AllowDrop = !locked;
+            }
+            bool changed = tunLockShown != locked; tunLockShown = locked;
+            lRouteHint.Text = locked ? TunLockMessage : NormalRouteHint;
+            lRouteHint.ForeColor = locked ? Theme.Text : Theme.Muted;
+            if (lRouteLock != null) lRouteLock.Visible = locked;
+            if (changed && relayConnect != null) relayConnect();
+        }
 
         void BuildConnectPage()
         {
@@ -177,13 +198,14 @@ namespace NetProbe
             // строка-подсказка контракта маршрутизации
             lRouteHint = new Label { AutoSize = false, Font = Theme.Small, ForeColor = Theme.Muted, BackColor = Color.Transparent, UseMnemonic = false, AutoEllipsis = true,
                 Text = Tx("DPI глобален: касается всего вне туннеля. Домены для DPI — на вкладке DPI  ·  Приоритет: «Строго VPN» > домен > приложение") };
+            lRouteLock = new Label { Text = "\uE72E", Font = Theme.Icons, ForeColor = Theme.Muted, BackColor = Color.Transparent, TextAlign = ContentAlignment.MiddleLeft, Visible = false };
             tip.SetToolTip(lRouteHint, Tx("Домены и IP в этих списках работают в TUN (подписки, туннели VLESS / VMess / Trojan); WireSock понимает только приложения. Приложение из Include при активном туннеле автоматически вне DPI."));
 
             // --- списки приложений: Include · Строго VPN · Exclude ---
             listCards = new ListCard[3];
             for (int i = 0; i < 3; i++)
             {
-                var lc = new ListCard(); listCards[i] = lc;
+                var lc = new ListCard { CheckerIcon = () => appIconBmp }; listCards[i] = lc;
                 lc.BAdd.Click += (s, e) =>
                 {
                     if (!CanEditList(lc.Key)) return;
@@ -213,10 +235,16 @@ namespace NetProbe
                 miIcoReset.Click += (s, e) => { var it = lcRef.Box.SelectedItem; if (it != null) { AppIcons.SetCustom(it, null); lcRef.Box.Invalidate(); } };
                 lc.Box.ContextMenuStrip.Items.Add(new ToolStripSeparator());
                 lc.Box.ContextMenuStrip.Items.AddRange(new ToolStripItem[] { miRen, miIco, miIcoReset });
+                lc.Box.ContextMenuStrip.Opening += (s, e) =>
+                {
+                    bool builtin = lcRef.Box.SelectedItem == ListCard.BuiltIn;
+                    miRen.Enabled = !tunLockShown && !TunSettingsLocked && !builtin;
+                    miIco.Enabled = miIcoReset.Enabled = !builtin;
+                };
                 // копирование выделенных строк (Ctrl+C) и перетаскивание между Include / «Строго VPN» / Exclude
                 Func<List<string>, List<string>> movable = l => l.Where(x => x != ListCard.BuiltIn && !AppLists.IsChild(x)).ToList();
                 lc.Box.CopyItems = movable;
-                lc.Box.DragItems = l => CanEditList(lcRef.Key) ? movable(l) : new List<string>();
+                lc.Box.DragItems = l => !tunLockShown && !TunSettingsLocked ? movable(l) : new List<string>();
                 lc.Box.AllowDrop = true;
                 lc.Box.ItemsDropped += (from, items) => MoveBetweenLists(from, lcRef, items);
                 var miCopySel = new ToolStripMenuItem(Tx("Копировать выделенное") + "   Ctrl+C");
@@ -228,7 +256,7 @@ namespace NetProbe
                 p.Controls.Add(lc);
             }
 
-            p.Controls.AddRange(new Control[] { board, cPrim, cBack, cFail, lRouteHint });
+            p.Controls.AddRange(new Control[] { board, cPrim, cBack, cFail, lRouteHint, lRouteLock });
             board.Controls.Add(cbRunMode);
             Action lay = () =>
             {
@@ -261,7 +289,9 @@ namespace NetProbe
                 int failH = cy + Theme.S(36);
                 cFail.SetBounds(L, y, W, failH);
                 y += failH + Theme.S(6);
-                lRouteHint.SetBounds(L + Theme.S(2), y, W, Theme.S(18)); y += Theme.S(18) + Theme.S(6);
+                int lockOffset = tunLockShown ? Theme.S(24) : 0;
+                lRouteLock.SetBounds(L + Theme.S(2), y, Theme.S(20), Theme.S(18));
+                lRouteHint.SetBounds(L + Theme.S(2) + lockOffset, y, W - lockOffset, Theme.S(18)); y += Theme.S(18) + Theme.S(6);
                 var vis = listCards.Where(c => c.Key != null || listCards.All(k => k.Key == null)).ToList();
                 int n = Math.Max(1, vis.Count), lw = (W - gap * (n - 1)) / n, lh = Math.Max(Theme.S(90), p.ClientSize.Height - Theme.S(18) - y);
                 for (int i = 0; i < vis.Count; i++) vis[i].SetBounds(L + i * (lw + gap), y, i == n - 1 ? W - (n - 1) * (lw + gap) : lw, lh);
