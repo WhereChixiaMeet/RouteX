@@ -160,7 +160,7 @@ namespace NetProbe
             if (sel.Count == 0) { lTasks.Text = Tx("Выберите процессы в таблице."); return; }
             foreach (var t in sel)
             {
-                if (t.Name.Equals("netprobe.exe", StringComparison.OrdinalIgnoreCase) || t.Name.StartsWith("netprobe-", StringComparison.OrdinalIgnoreCase)) continue;
+                if (t.Name.Equals("netprobe.exe", StringComparison.OrdinalIgnoreCase) || t.Name.Equals("routex.exe", StringComparison.OrdinalIgnoreCase) || t.Name.StartsWith("netprobe-", StringComparison.OrdinalIgnoreCase)) continue;
                 AddToList(key, fullPath && t.Path != "" ? t.Path : t.Name);
             }
             tasksMsgUntil = DateTime.Now.AddSeconds(6);

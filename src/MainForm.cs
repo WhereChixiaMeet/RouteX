@@ -16,7 +16,7 @@ namespace NetProbe
 {
     public partial class MainForm : Form
     {
-        public const string Version = "3.5.0";
+        public const string Version = "3.5.1";
         Settings st;
         readonly ChannelMonitor monVpn = new ChannelMonitor("vpn"), monDir = new ChannelMonitor("direct");
         volatile Prober pVpn, pDir;
@@ -389,7 +389,7 @@ namespace NetProbe
             ThreadPool.QueueUserWorkItem(_ => { CheckCurl(); Logger.Prune(); });
             if (st.AutoStartMonitor) StartMonitoring(false); // мониторинг — как был при выходе (Start/Stop запоминаются)
             else SyncBgProbe(); // выключен — опросы только для лога (если включено)
-            if (autorunApplied == null) { autorunApplied = st.Autorun; if (st.Autorun) ThreadPool.QueueUserWorkItem(_ => SetAutorun(true)); }
+            if (autorunApplied == null) { autorunApplied = st.Autorun; if (st.Autorun && !NameMigration.Pending && !NameMigration.LegacyFallback) ThreadPool.QueueUserWorkItem(_ => SetAutorun(true)); }
             // 3.0: домены из карточек приложений → общий список DPI (один раз, с одним диалогом)
             if (!st.DomainsMigrated)
             {
@@ -410,7 +410,7 @@ namespace NetProbe
                 router.Adopt(handoff);
                 xm.Adopt(handoff.ContainsKey("xray") && handoff["xray"] == "1");
                 if (Reapply3) { router.Reapply(); xm.Reapply(); Logger.Write(LogLevel.Route, Tx("Перезапуск: конфиги перестроены по новой логике")); }
-                else if (NeedsManualRestart) BeginInvoke((Action)ShowRestartNotice);
+                else if (NeedsManualRestart && !NameMigration.Pending) BeginInvoke((Action)ShowRestartNotice);
             }
             else if (st.DpiButton == 1) router.SetManualDpi(true); // DPI был включён кнопкой до перезапуска
             // автоподключение: без диалогов, если туннель ещё не настроен (например, чистая установка)
@@ -435,9 +435,11 @@ namespace NetProbe
                 else if (last != null && src0 != Source.Subs) Logger.Write(LogLevel.Warn, Tx("Автоподключение к серверу пропущено: ") + (SubsBlockedReason() ?? ""));
             }
             TgApply(); // TG Proxy: включён — поднимается вместе с NetProbe
+            if (NameMigration.Pending) { st.UpdatedFrom = ""; st.Save(); LayoutNav(); }
             ScheduledUpdateCheck(true);
             updTimer.Tick += (s, e) => ScheduledUpdateCheck(false); updTimer.Start();
             appUpdTimer.Tick += (s, e) => { appUpdTimer.Stop(); if (st.CheckUpdates) CheckAppUpdate(false); else appUpdTimer.Start(); }; appUpdTimer.Start();
+            NameMigration.AfterStartup(st);
         }
 
         // ================= Shell / navigation =================

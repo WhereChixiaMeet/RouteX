@@ -23,17 +23,23 @@ namespace NetProbe
         [STAThread]
         static void Main(string[] args)
         {
+            try { if (NameMigration.HandleHelper(args)) return; }
+            catch (Exception ex) { Crash(ex); return; }
+            try { NameMigration.ResolveInstallation(args); }
+            catch (Exception ex) { Crash(ex); return; }
             try { WM_SHOWME = Native.RegisterWindowMessage("NetProbe_ShowMe_7f3a"); WM_QUITME = Native.RegisterWindowMessage("NetProbe_QuitMe_7f3a"); } catch { }
             bool created;
             using (var mutex = new Mutex(true, "NetProbe2_SingleInstance_7f3a", out created))
             {
                 // --replace: попросить запущенную копию закрыться и занять её место (обновление без ручного выхода)
-                if (!created && Array.IndexOf(args, "--replace") >= 0)
+                if (!created && (Array.IndexOf(args, "--replace") >= 0 || NameMigration.HasLegacyInstance()))
                 {
                     try { Native.PostMessage((IntPtr)0xffff, WM_QUITME, IntPtr.Zero, IntPtr.Zero); } catch { }
                     try { created = mutex.WaitOne(15000); } catch (AbandonedMutexException) { created = true; }
                 }
                 if (!created && Array.IndexOf(args, "--shots") < 0 && Array.IndexOf(args, "--selftest") < 0 && Array.IndexOf(args, "--speedtest") < 0) { try { Native.PostMessage((IntPtr)0xffff, WM_SHOWME, IntPtr.Zero, IntPtr.Zero); } catch { } return; }
+                try { if (NameMigration.Bootstrap(args)) return; }
+                catch (Exception ex) { Crash(ex); return; }
                 try { Native.SetProcessDPIAware(); } catch { }
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
@@ -42,7 +48,7 @@ namespace NetProbe
                 AppDomain.CurrentDomain.UnhandledException += (s, e) => Crash(e.ExceptionObject as Exception);
                 bool min = Array.Exists(args, a => a.Equals("--minimized", StringComparison.OrdinalIgnoreCase));
                 MainForm.Updated = Array.Exists(args, a => a == "--updated");
-                MainForm.Reapply3 = Array.Exists(args, a => a == "--reapply");
+                MainForm.Reapply3 = NameMigration.Pending || Array.Exists(args, a => a == "--reapply");
                 int ti = Array.FindIndex(args, a => a == "--selftest");
                 if (ti >= 0 && ti + 1 < args.Length) { SelfTest.Run(args[ti + 1]); return; }
                 int sp = Array.FindIndex(args, a => a == "--speedtest");

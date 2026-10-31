@@ -3,7 +3,7 @@
 
 **Settings → Engine → TUN stack** selects `mixed` or `gvisor` for Configs/subscription TUN. Disconnect before changing and reconnect to apply. Existing installs keep `mixed`.
 
-3.5.0: DPI/VPN buttons use animated sliders in their existing positions, with the selected theme and accent color. Release downloads contain one executable: `NetProbe.exe`. Older versions that only recognize `RouteX.exe` need a manual update to this version.
+3.5.1 automatically migrates the main executable to **RouteX.exe** in the existing installation directory. The transition release includes an identical NetProbe.exe bridge for older updaters; both enter the same migration. Data folders and internal network identities remain unchanged. The old launcher is backed up and removed after startup and Windows integration succeed; failed integration retains it. See [migration notes](RELEASE-3.5.1.md).
 
 Version 3.4.10: update checks fall back to github.com pages when the GitHub API answers 403 (shared VPN IP rate limit). See [release notes](docs/releases/v3.4.10.md).
 
@@ -18,7 +18,7 @@ Windows protocol router: WireGuard · VLESS · VMess · Trojan, DPI bypass, MTPr
 
 ## Folder layout
 ```
-NetProbe.exe     (RouteX application)
+RouteX.exe       (main application; NetProbe.exe is a transition bridge)
 zapret\          winws.exe, WinDivert, lists (copied from zapret-discord-youtube)
 xray\, singbox\  cores, installed/updated from the app
 config\          settings.ini, tunnels\*.conf|*.json, dpi\*.txt, lists\*.txt, themes\, runtime\

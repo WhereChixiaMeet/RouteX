@@ -50,7 +50,7 @@ namespace NetProbe
             {
                 string ex = Path.Combine(dir, "x");
                 ZipFile.ExtractToDirectory(file, ex);
-                var exe = Directory.GetFiles(ex, "NetProbe.exe", SearchOption.AllDirectories).FirstOrDefault() ?? Directory.GetFiles(ex, "RouteX.exe", SearchOption.AllDirectories).FirstOrDefault();
+                var exe = Directory.GetFiles(ex, "RouteX.exe", SearchOption.AllDirectories).FirstOrDefault() ?? Directory.GetFiles(ex, "NetProbe.exe", SearchOption.AllDirectories).FirstOrDefault();
                 if (exe == null) throw new Exception(Tx("В архиве релиза нет NetProbe.exe"));
                 return exe;
             }
@@ -101,14 +101,7 @@ namespace NetProbe
         // Заменить exe после выхода текущего процесса и запустить новую версию с --updated (права админа наследуются)
         public static void LaunchSwap(string newExe)
         {
-            string exe = System.Windows.Forms.Application.ExecutablePath;
-            int pid = Process.GetCurrentProcess().Id;
-            Func<string, string> q = s => "'" + s.Replace("'", "''") + "'";
-            string ps = "Wait-Process -Id " + pid + " -Timeout 30 -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 500; " +
-                        "for ($i = 0; $i -lt 20; $i++) { try { Copy-Item -LiteralPath " + q(newExe) + " -Destination " + q(exe) + " -Force -ErrorAction Stop; break } catch { Start-Sleep -Milliseconds 500 } }; " +
-                        "Start-Process -FilePath " + q(exe) + " -ArgumentList '--updated'";
-            string enc = Convert.ToBase64String(Encoding.Unicode.GetBytes(ps));
-            Process.Start(new ProcessStartInfo("powershell.exe", "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -EncodedCommand " + enc) { UseShellExecute = false, CreateNoWindow = true });
+            NameMigration.LaunchUpdate(newExe);
         }
     }
 }

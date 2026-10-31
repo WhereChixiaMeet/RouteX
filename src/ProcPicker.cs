@@ -72,7 +72,7 @@ namespace NetProbe
             });
         }
 
-        static readonly string[] Hidden = { "svchost.exe", "System.exe", "Registry.exe", "smss.exe", "csrss.exe", "wininit.exe", "services.exe", "lsass.exe", "winlogon.exe", "fontdrvhost.exe", "dwm.exe", "conhost.exe", "Memory Compression.exe", "netprobe.exe", "netprobe-vpn.exe", "netprobe-direct.exe" };
+        static readonly string[] Hidden = { "svchost.exe", "System.exe", "Registry.exe", "smss.exe", "csrss.exe", "wininit.exe", "services.exe", "lsass.exe", "winlogon.exe", "fontdrvhost.exe", "dwm.exe", "conhost.exe", "Memory Compression.exe", "netprobe.exe", "routex.exe", "netprobe-vpn.exe", "netprobe-direct.exe" };
 
         void Filter(bool net)
         {

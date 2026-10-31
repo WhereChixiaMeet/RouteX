@@ -787,22 +787,14 @@ namespace NetProbe
 
         // Автозапуск через планировщик задач: NetProbe требует прав администратора, а ключ Run их не даёт
         // своя задача на каждую копию приложения (основная и чистая не мешают друг другу)
-        static string TaskName { get { return Settings.Root.TrimEnd('\\').EndsWith("\\NetProbe", StringComparison.OrdinalIgnoreCase) ? "NetProbe" : "NetProbe " + ServerEntry.MakeId(Application.ExecutablePath.ToLowerInvariant()).Substring(0, 6); } }
+        static string TaskName { get { return NameMigration.AutorunTaskName(Settings.Root); } }
 
         void SetAutorun(bool on)
         {
+            if (on && NameMigration.LegacyFallback) { Logger.Write(LogLevel.Warn, "Migration rollback: existing autorun target retained."); return; }
             try
             {
-                if (on)
-                {
-                    var r = Proc.Run("schtasks.exe", "/Create /F /TN \"" + TaskName + "\" /SC ONLOGON /RL HIGHEST /DELAY 0000:15 /TR \"\\\"" + Application.ExecutablePath + "\\\" --minimized\"", 15000, Proc.Oem);
-                    if (r.Exit != 0) Logger.Write(LogLevel.Error, Tx("Автозапуск: ") + (r.Out + r.Err).Trim());
-                }
-                else
-                {
-                    var q = Proc.Run("schtasks.exe", "/Query /TN \"" + TaskName + "\"", 8000, Proc.Oem);
-                    if (q.Exit == 0) Proc.Run("schtasks.exe", "/Delete /F /TN \"" + TaskName + "\"", 8000, Proc.Oem);
-                }
+                if (!NameMigration.ConfigureAutorun(Settings.Root, on)) Logger.Write(LogLevel.Warn, "RouteX: autorun integration is incomplete; legacy launcher retained.");
             }
             catch (Exception ex) { Logger.Write(LogLevel.Error, Tx("Автозапуск: ") + ex.Message); }
         }
