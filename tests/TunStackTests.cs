@@ -39,6 +39,19 @@ class TunStackTests
             Check(reloaded.TunStack == "gvisor", "gvisor persists through settings save/load");
             Check(settings.Clone().TunStack == "gvisor", "Tunnel settings clone preserves selected stack");
             var copy = new Settings(); copy.CopyFrom(settings); Check(copy.TunStack == "gvisor", "Settings import/copy preserves selected stack");
+            File.AppendAllText(Path.Combine(Settings.Dir, "settings.ini"), "\r\nRuleSetsEnabled=1\r\nConfigRulesEnabled=1\r\n");
+            File.WriteAllText(Path.Combine(Settings.Dir, "routing.json"), "{invalid obsolete editor data}");
+            var migrated = Settings.Load(); primaryFlag.SetValue(migrated, true);
+            Check(typeof(Settings).GetField("RuleSetsEnabled") == null && typeof(Settings).GetField("ConfigRulesEnabled") == null, "Old editor switches cannot enable hidden routing");
+            var standard = Build(migrated, "standard-migrated.json");
+            Check((string)Obj(standard["route"])["final"] == "direct", "Include lists remain active despite old enabled editor settings and routing.json");
+            var tunnelSettings = typeof(Settings).Assembly.GetTypes().Select(t => t.GetMethod("TunSettings", BindingFlags.NonPublic | BindingFlags.Static)).First(m => m != null);
+            migrated.BypassRu = true;
+            var effective = (Settings)tunnelSettings.Invoke(null, new object[] { migrated });
+            Check(effective.BypassRu, "Configs tunnel preserves RU bypass");
+            var server = new ServerEntry { Protocol = "vless", Address = "192.0.2.1", Port = 443, UserId = "11111111-1111-1111-1111-111111111111" };
+            string xray = XrayConfig.Build(effective, server);
+            Check(xray.Contains("geosite:category-ru") && xray.Contains("geoip:ru") && xray.Contains("domain:ru") && xray.Contains("domain:su") && xray.Contains("domain:xn--p1ai"), "Xray retains all standard RU domain and IP bypass rules");
             foreach (string invalid in new[] { "invalid", "", null })
             {
                 settings.TunStack = invalid;
