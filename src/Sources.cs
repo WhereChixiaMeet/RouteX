@@ -96,15 +96,15 @@ namespace NetProbe
         }
 
         // ---- верхние кнопки, одинаковые на Routing и Subscriptions: VPN · ВКЛ/ВЫКЛ, DPI · ВКЛ/ВЫКЛ, Маршрут ----
-        sealed class TopButtons { public FlatButton Vpn, Dpi, Route; }
+        sealed class TopButtons { public PowerSlider Vpn, Dpi; public FlatButton Route; }
         readonly List<TopButtons> topButtons = new List<TopButtons>();
 
         TopButtons NewTopButtons(Control page, Func<string> preferServer)
         {
             var t = new TopButtons();
-            t.Vpn = new FlatButton("VPN") { Glyph = "\uE7E8", Width = Theme.S(150), Height = Theme.S(36) };
+            t.Vpn = new PowerSlider("VPN");
             t.Vpn.Click += (s, e) => VpnButtonClick(preferServer != null ? preferServer() : null);
-            t.Dpi = new FlatButton("DPI") { Glyph = "\uE7E8", Width = Theme.S(150), Height = Theme.S(36) };
+            t.Dpi = new PowerSlider("DPI");
             t.Dpi.Click += (s, e) => { ToggleDpi(); UpdateModeUi(); };
             t.Route = new FlatButton(Tx("Маршрут")) { Glyph = "\uE721", Height = Theme.S(36) }.AutoW();
             t.Route.Click += (s, e) => ShowRoute(null, null);
@@ -143,8 +143,10 @@ namespace NetProbe
             foreach (var t in topButtons.ToList())
             {
                 if (t.Vpn.IsDisposed) continue;
-                t.Vpn.Primary = on; t.Vpn.Text = "VPN  ·  " + (on ? Tx("ВКЛ") : Tx("ВЫКЛ")); t.Vpn.Enabled = on || why == null; t.Vpn.Invalidate();
-                t.Dpi.Primary = dpi; t.Dpi.Text = "DPI  ·  " + (dpi ? Tx("ВКЛ") : Tx("ВЫКЛ")); t.Dpi.Invalidate();
+                bool connecting = pendingXConnect != null || router.State == RouteState.Connecting;
+                t.Vpn.SetState(on, connecting, "VPN  ·  " + (connecting ? Tx("Подключение…") : on ? Tx("ВКЛ") : Tx("ВЫКЛ")));
+                t.Vpn.Enabled = on || why == null;
+                t.Dpi.SetState(dpi, false, "DPI  ·  " + (dpi ? Tx("ВКЛ") : Tx("ВЫКЛ")));
             }
         }
 

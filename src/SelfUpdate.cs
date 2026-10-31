@@ -25,9 +25,13 @@ namespace NetProbe
             return Version.TryParse((tag ?? "").TrimStart('v', 'V').Split('-')[0], out a) && Version.TryParse(MainForm.Version, out b) && a > b;
         }
 
+        internal static bool AppAsset(string n)
+        {
+            return n.Equals("NetProbe.exe", StringComparison.OrdinalIgnoreCase) || n.Equals("RouteX.exe", StringComparison.OrdinalIgnoreCase) || (n.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) && n.IndexOf("source", StringComparison.OrdinalIgnoreCase) < 0 && n.IndexOf("src", StringComparison.OrdinalIgnoreCase) < 0);
+        }
         public static Updater.Release Latest()
         {
-            return Updater.Latest(Repo, n => n.Equals("RouteX.exe", StringComparison.OrdinalIgnoreCase) || (n.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) && n.IndexOf("source", StringComparison.OrdinalIgnoreCase) < 0 && n.IndexOf("src", StringComparison.OrdinalIgnoreCase) < 0));
+            return Updater.Latest(Repo, AppAsset);
         }
 
         // Скачивает новую версию, возвращает путь к новому NetProbe.exe
@@ -46,8 +50,8 @@ namespace NetProbe
             {
                 string ex = Path.Combine(dir, "x");
                 ZipFile.ExtractToDirectory(file, ex);
-                var exe = Directory.GetFiles(ex, "RouteX.exe", SearchOption.AllDirectories).FirstOrDefault();
-                if (exe == null) throw new Exception(Tx("В архиве релиза нет RouteX.exe"));
+                var exe = Directory.GetFiles(ex, "NetProbe.exe", SearchOption.AllDirectories).FirstOrDefault() ?? Directory.GetFiles(ex, "RouteX.exe", SearchOption.AllDirectories).FirstOrDefault();
+                if (exe == null) throw new Exception(Tx("В архиве релиза нет NetProbe.exe"));
                 return exe;
             }
             return file;
