@@ -64,6 +64,7 @@ namespace NetProbe
         public bool WiresockAdapter = false; // -lac: виртуальный адаптер
         public bool DnsViaTunnel = false;
         public bool TunBlockIpv6 = true; // IPv4-only TUN; strict_route blocks the unsupported family on Windows.
+        public string TunStack = "mixed"; // sing-box TUN: mixed (system TCP / gVisor UDP) or gvisor (virtual TCP / UDP).
         public bool TunRejectQuic = true; // TUN: QUIC (UDP 443) to the server is refused at once, so browsers switch to TCP without waiting
         // 3.4.9: rule editor (config\routing.json, v2rayN style) instead of Include/Exclude for Configs; off by default.
         // New name on purpose: an old ConfigRulesEnabled=1 (3.4.3 editor, removed in 3.4.6) must not switch it on.
@@ -305,6 +306,7 @@ namespace NetProbe
 
         public void Clamp()
         {
+            if (TunStack != "mixed" && TunStack != "gvisor") TunStack = "mixed";
             SideWidth = Math.Max(150, Math.Min(380, SideWidth));
             TgPort = Math.Max(1, Math.Min(65535, TgPort)); TgBufKb = Math.Max(4, Math.Min(4096, TgBufKb)); TgPool = Math.Max(0, Math.Min(32, TgPool));
             if (!TgConst.ValidSecret(TgSecret)) TgSecret = TgConst.NewSecret(); // секрет создаётся один раз и хранится

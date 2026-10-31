@@ -413,6 +413,17 @@ namespace NetProbe
                 UpdateModeUi(); UpdateServersUi();
             };
             section("Routing · Configs (VLESS / VMess / Trojan)");
+            var cbTunStack = new DarkCombo(); cbTunStack.Items.AddRange(new object[] { "mixed", "gvisor" });
+            cbTunStack.SelectedItem = st.TunStack == "gvisor" ? "gvisor" : "mixed";
+            cbTunStack.SelectedIndexChanged += (s, e) =>
+            {
+                if (!cbTunStack.UserPick || loadingSettings) return;
+                string want = cbTunStack.SelectedItem as string ?? "mixed";
+                if (want == st.TunStack) return;
+                if (!CanEditTunSettings()) { cbTunStack.SelectedItem = st.TunStack; return; }
+                st.TunStack = want; st.Save();
+            };
+            row("TUN stack", cbTunStack, "mixed: system TCP + gVisor UDP. gvisor: virtual TCP + UDP. Used by sing-box TUN in Configs and subscriptions; no effect on WireGuard. Disconnect before changing; applies on reconnect. Neither option guarantees higher speed.");
             var rulesButton = new FlatButton("Rule editor…").AutoW(); rulesButton.Click += (s, e) => ShowRoutingRules();
             row("Routing rule sets", rulesButton, null);
             var cNoV6 = Ui.Check("IPv4-only TUN (disable IPv6 in Configs)", st.TunBlockIpv6);
@@ -453,6 +464,7 @@ namespace NetProbe
             row(Tx("Замер скорости, с"), nSpdSec, null);
             loadProxyUi = () =>
             {
+                cbTunStack.SelectedItem = st.TunStack == "gvisor" ? "gvisor" : "mixed";
                 cSys.Checked = st.SysProxy; cRu.Checked = st.BypassRu; cAds.Checked = st.BlockAds; cLan.Checked = st.AllowLan;
                 nSocks.Value = Math.Max(1024, Math.Min(65000, st.SocksPort)); nHttp.Value = Math.Max(1024, Math.Min(65000, st.HttpPort));
                 tbTestUrl.Text = st.TestUrl; tbSpeedUrl.Text = st.SpeedUrl; nSpdSec.Value = Math.Max(3, Math.Min(60, st.SpeedSec));

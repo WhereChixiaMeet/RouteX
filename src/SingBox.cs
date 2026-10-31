@@ -164,7 +164,7 @@ namespace NetProbe
                     } },
                 { "inbounds", new object[] { new Dictionary<string, object> {
                     { "type", "tun" }, { "tag", "tun-in" }, { "interface_name", "NetProbe TUN" }, { "address", ipv4 ? new[] { "172.19.0.1/30" } : new[] { "172.19.0.1/30", "fdfe:dcba:9876::1/126" } },
-                    { "mtu", 9000 }, { "auto_route", true }, { "strict_route", true }, { "stack", "mixed" } } } },
+                    { "mtu", 9000 }, { "auto_route", true }, { "strict_route", true }, { "stack", st.TunStack == "gvisor" ? "gvisor" : "mixed" } } } },
                 { "outbounds", new object[] {
                     primary
                         ? new Dictionary<string, object> { { "type", "socks" }, { "tag", "proxy" }, { "server", "127.0.0.1" }, { "server_port", st.SocksPort }, { "version", "5" }, { "username", TunnelAuth.User }, { "password", TunnelAuth.Pass } }

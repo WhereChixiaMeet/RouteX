@@ -1,6 +1,8 @@
 # RouteX
 *(formerly NetProbe)*
 
+Local 3.4.12 preview: **Settings → Engine → TUN stack** selects `mixed` or `gvisor` for Configs/subscription TUN. Disconnect before changing and reconnect to apply. Existing installs keep `mixed`. See [preview notes](PREVIEW-3.4.12.md).
+
 Version 3.4.10: update checks fall back to github.com pages when the GitHub API answers 403 (shared VPN IP rate limit). See [release notes](docs/releases/v3.4.10.md).
 
 ### MANUAL RESTART REQUIRED AFTER UPDATE ###
