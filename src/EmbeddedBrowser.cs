@@ -16,14 +16,35 @@ namespace NetProbe
             // Assembly.Load(byte[]) ever runs (behavioral AV heuristics treat
             // in-memory loading as dropper-like activity).
             if (File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Microsoft.Web.WebView2.Core.dll"))) return;
+            // Standalone RouteX.exe (self-update or a bare download): put the built-in copies on disk once,
+            // next to the exe when the folder is writable (the next start then needs no resolver at all),
+            // and load them from that file. Assembly.Load(byte[]) is never used: in-memory loading is what
+            // antivirus heuristics flag as a dropper.
             AppDomain.CurrentDomain.AssemblyResolve += (s, e) => {
                 string name = new AssemblyName(e.Name).Name;
                 if (name != "Microsoft.Web.WebView2.Core" && name != "Microsoft.Web.WebView2.WinForms") return null;
-                using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("RouteX.Browser." + name + ".dll")) {
-                    if (stream == null) return null;
-                    using (var bytes = new MemoryStream()) { stream.CopyTo(bytes); return Assembly.Load(bytes.ToArray()); }
-                }
+                string path = Extract("RouteX.Browser." + name + ".dll", name + ".dll", AppDomain.CurrentDomain.BaseDirectory) ?? Extract("RouteX.Browser." + name + ".dll", name + ".dll", Path.Combine(Settings.Sub("runtime"), "webview2"));
+                return path == null ? null : Assembly.LoadFrom(path);
             };
+        }
+        // Writes an embedded resource to dir\file unless an identical copy is already there; null on failure.
+        static string Extract(string resource, string file, string dir)
+        {
+            try {
+                byte[] bytes;
+                using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resource)) {
+                    if (stream == null) return null;
+                    using (var buffer = new MemoryStream()) { stream.CopyTo(buffer); bytes = buffer.ToArray(); }
+                }
+                Directory.CreateDirectory(dir);
+                string path = Path.Combine(dir, file);
+                if (!File.Exists(path) || !SameBytes(File.ReadAllBytes(path), bytes)) File.WriteAllBytes(path, bytes);
+                return path;
+            } catch { return null; }
+        }
+        static bool SameBytes(byte[] a, byte[] b)
+        {
+            using (var sha = SHA256.Create()) return Convert.ToBase64String(sha.ComputeHash(a)) == Convert.ToBase64String(sha.ComputeHash(b));
         }
         public static string LoaderDirectory()
         {

@@ -35,6 +35,19 @@ namespace NetProbe
             revealStarted=true;loading.Visible=false;
             await view.CoreWebView2.ExecuteScriptAsync("window.routexBeginReveal&&window.routexBeginReveal("+(BackgroundStartup&&!Visible?"true":"false")+")");
         }
+        public bool Revealed { get { return revealStarted; } }
+        // Startup watchdog: never leave the loading screen up forever (GPU / occlusion stalls,
+        // a script error, a lost message). Removes both loading layers and shows the page as is.
+        public async Task ForceRevealAsync()
+        {
+            transitionReady=true;revealStarted=true;loading.Visible=false;
+            if(Loaded&&!IsDisposed)await view.CoreWebView2.ExecuteScriptAsync("(()=>{try{window.routexBeginReveal&&window.routexBeginReveal(true);}catch(e){}const o=document.getElementById('rx-startup-overlay');if(o)o.remove();window.routexStartupSettled=true;})()");
+        }
+        public async Task<string> ScriptStateAsync()
+        {
+            if(!Loaded||IsDisposed)return "not loaded";
+            return await view.CoreWebView2.ExecuteScriptAsync("JSON.stringify({ready:document.readyState,prepare:typeof window.routexPrepareReveal,settled:!!window.routexStartupSettled,uiError:window.ROUTEX_UI_ERROR||'',bootError:window.ROUTEX_BOOT_ERROR||'',hidden:document.hidden})");
+        }
         public BrowserSurface()
         {
             Dock = DockStyle.Fill; BackColor = Theme.Bg;
@@ -49,10 +62,12 @@ namespace NetProbe
             var controlHandle=view.Handle; // A minimized launch still needs a real child HWND.
             if(!loaderConfigured){CoreWebView2Environment.SetLoaderDllFolderPath(EmbeddedBrowser.LoaderDirectory());loaderConfigured=true;}
             var options = new CoreWebView2EnvironmentOptions("--disable-background-networking --disable-component-update");
+            Diagnostics="creating environment";
             var environment = await CoreWebView2Environment.CreateAsync(null, Path.Combine(Settings.Sub("runtime"), "webview-profile"), options);
-            UiStartupTiming.Mark("WebView environment ready");
+            UiStartupTiming.Mark("WebView environment ready");Diagnostics="environment ready";
+            Diagnostics="creating control";
             await view.EnsureCoreWebView2Async(environment);
-            UiStartupTiming.Mark("WebView control ready");
+            UiStartupTiming.Mark("WebView control ready");Diagnostics="control ready";
             var core = view.CoreWebView2;
             core.Settings.AreHostObjectsAllowed = false;
             core.Settings.AreDefaultContextMenusEnabled = false;
@@ -92,7 +107,8 @@ namespace NetProbe
                 Diagnostics = "navigation completed: " + e.IsSuccess + " " + e.WebErrorStatus + " uri=" + lastNavigation;
                 if(e.IsSuccess&&core.Source==DocumentUri){Loaded=true;
                     try{
-                        await core.ExecuteScriptAsync("window.routexPrepareReveal&&window.routexPrepareReveal("+(BackgroundStartup?"true":"false")+")");
+                        string prepared=await core.ExecuteScriptAsync("typeof window.routexPrepareReveal==='function'?(window.routexPrepareReveal("+(BackgroundStartup?"true":"false")+"),'ok'):'missing'");
+                        if(prepared!="\"ok\""){Logger.Write(LogLevel.Warn,"Interface script did not start ("+await ScriptStateAsync()+"), showing it without the transition");transitionReady=true;await RevealWhenVisibleAsync();}
                     }catch(Exception ex){transitionReady=true;Logger.Write(LogLevel.Warn,"Interface transition: "+ex.Message);try{await RevealWhenVisibleAsync();}catch{}}
                     Ready?.Invoke();
                 }

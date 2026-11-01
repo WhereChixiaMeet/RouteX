@@ -16,7 +16,7 @@ namespace NetProbe
 {
     public partial class MainForm : Form
     {
-        public const string Version = "4.0.1";
+        public const string Version = "4.0.2";
         public static bool HadProfileAtLaunch;
         Settings st;
         readonly ChannelMonitor monVpn = new ChannelMonitor("vpn"), monDir = new ChannelMonitor("direct");
@@ -178,12 +178,14 @@ namespace NetProbe
         protected override async void OnLoad(EventArgs e)
         {
             base.OnLoad(e);
+            // The connection engine does not depend on the interface: start it first, so a slow
+            // or broken WebView2 never delays auto-connect and never takes the whole app down.
+#if !UI_PREVIEW
+            Startup();
+#endif
             try {
                 await EnableBrowserInterfaceAsync();
-#if !UI_PREVIEW
-                Startup();
-#endif
-            } catch (Exception ex) { MessageBox.Show(this,"Could not initialize the interface. Microsoft Edge WebView2 Runtime is required.\r\n\r\n"+ex.Message,"RouteX",MessageBoxButtons.OK,MessageBoxIcon.Error);Close(); }
+            } catch (Exception ex) { UseNativeInterface("Could not initialize the interface (Microsoft Edge WebView2 Runtime): "+ex.Message); }
         }
 #else
         protected override void OnLoad(EventArgs e) { base.OnLoad(e); Startup(); }
@@ -570,7 +572,7 @@ namespace NetProbe
             foreach (var c in old) c.Dispose();
             BuildUi();
 #if WEB_UI
-            if (browser != null) { if(browser.Parent!=this)Controls.Add(browser); browser.BringToFront(); side.Visible = content.Visible = false; }
+            if (WebUiShown) { if(browser.Parent!=this)Controls.Add(browser); browser.BringToFront(); side.Visible = content.Visible = false; }
 #endif
             chart.A.AddRange(a); chart.B.AddRange(b); chart.TA.AddRange(ta); chart.TB.AddRange(tb); chart.Invalidate();
             RedrawLog();

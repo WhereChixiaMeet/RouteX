@@ -60,6 +60,7 @@ namespace NetProbe
             catch(Exception ex){System.IO.File.WriteAllText(System.IO.Path.Combine(Settings.Root,"preview-error.txt"),ex.ToString());Environment.ExitCode=1;}
             return;
 #endif
+            SelfUpdate.WaitForPrevious(args);
             try { if (NameMigration.HandleHelper(args)) return; }
             catch (Exception ex) { Crash(ex); return; }
             try { NameMigration.ResolveInstallation(args); }

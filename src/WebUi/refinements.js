@@ -51,20 +51,26 @@ const startupStyle=document.createElement('style');startupStyle.textContent=`
 @media(prefers-reduced-motion:reduce){#rx-startup-overlay,.rx-loading-mark{transition:none}.rx-loading-mark i,.rx-window.rx-enter{animation:none}}
 `;document.head.append(startupStyle);
 let revealed=false,welcomeOffered=false;
-window.routexPrepareReveal=async function(background=false){
+// requestAnimationFrame and animations stop while the page is not painted (hidden / occluded window,
+// stalled GPU process). Startup must not depend on them: every wait has a timer fallback.
+function twoFrames(){return new Promise(resolve=>{let done=false;const finish=()=>{if(!done){done=true;resolve();}};setTimeout(finish,250);requestAnimationFrame(()=>requestAnimationFrame(finish));});}
+window.routexPrepareReveal=async function(background=false){try{await prepareRevealSteps(background);}catch(e){window.ROUTEX_UI_ERROR=String(e&&e.message||e);}window.chrome.webview.postMessage({command:'reveal-ready'});};
+async function prepareRevealSteps(background){
  const pending=[...document.images].map(image=>image.decode?.().catch(()=>{}));if(document.fonts)pending.push(document.fonts.ready);
  if(state.background){const image=new Image();image.src=state.background;pending.push(image.decode().catch(()=>{}));}
  await Promise.race([Promise.all(pending),new Promise(resolve=>setTimeout(resolve,2000))]);
- if(!background)await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
- if(queuedSnapshot){const snapshot=queuedSnapshot;queuedSnapshot=null;applyingSnapshot=true;absorb(snapshot);structuralSnapshot=snapshotStructure(snapshot);render();applyingSnapshot=false;if(!background)await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));}
- window.chrome.webview.postMessage({command:'reveal-ready'});
-};
+ if(!background)await twoFrames();
+ if(queuedSnapshot){const snapshot=queuedSnapshot;queuedSnapshot=null;applyingSnapshot=true;absorb(snapshot);structuralSnapshot=snapshotStructure(snapshot);render();applyingSnapshot=false;if(!background)await twoFrames();}
+ 
+}
 window.routexBeginReveal=function(background=false){if(revealed)return;revealed=true;if(background){startupOverlay.remove();window.routexStartupSettled=true;return;}const colors=getComputedStyle(app);for(const key of ['--rx-bg','--rx-text','--rx-muted','--rx-accent'])startupOverlay.style.setProperty(key,colors.getPropertyValue(key));
- requestAnimationFrame(()=>requestAnimationFrame(()=>{const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+ let settled=false;const settle=()=>{if(settled)return;settled=true;startupOverlay.remove();window.routexStartupSettled=true;flushSnapshot();setTimeout(offerReleaseReview,700);};
+ setTimeout(settle,2500);
+ twoFrames().then(()=>{if(settled)return;try{const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
  const options={duration:reduced?450:1100,easing:'cubic-bezier(.4,0,.2,1)',fill:'both'};
  window.routexRevealStartedAt=performance.now();window.routexRevealDuration=options.duration;
  const fade=startupOverlay.animate([{opacity:1},{opacity:0}],options);
- fade.finished.then(()=>{startupOverlay.remove();window.routexStartupSettled=true;flushSnapshot();setTimeout(offerReleaseReview,700);});}));
+ fade.finished.then(settle,settle);}catch(e){settle();}});
 };
 function offerReleaseReview(){if(welcomeOffered||!host.whatsNew)return;welcomeOffered=true;showReleaseReview();}
 window.routexActivate=function(){if(window.routexStartupSettled)offerReleaseReview();};

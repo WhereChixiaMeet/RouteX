@@ -92,10 +92,19 @@ namespace NetProbe
         {
             string exe = System.Windows.Forms.Application.ExecutablePath;
             int pid = Process.GetCurrentProcess().Id;
-            Func<string, string> q = s => "'" + s.Replace("'", "''") + "'";
-            string ps = "Wait-Process -Id " + pid + " -Timeout 30 -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 500; Start-Process -FilePath " + q(exe) + " -ArgumentList '--updated','--reapply'";
-            string enc = Convert.ToBase64String(Encoding.Unicode.GetBytes(ps));
-            Process.Start(new ProcessStartInfo("powershell.exe", "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -EncodedCommand " + enc) { UseShellExecute = false, CreateNoWindow = true });
+            // The new instance waits for this one itself (--wait-pid, handled in Program.Main before the
+            // single-instance mutex). No hidden PowerShell with an encoded command: antivirus heuristics
+            // treat that pattern as attacker-controlled command execution.
+            Process.Start(new ProcessStartInfo(exe, "--wait-pid " + pid + " --updated --reapply") { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(exe) });
+        }
+
+        // --wait-pid <pid>: wait (up to 30 s) until the previous instance has exited.
+        public static void WaitForPrevious(string[] args)
+        {
+            int i = Array.IndexOf(args, "--wait-pid"), pid;
+            if (i < 0 || i + 1 >= args.Length || !int.TryParse(args[i + 1], out pid)) return;
+            try { using (var p = Process.GetProcessById(pid)) p.WaitForExit(30000); } catch { }
+            System.Threading.Thread.Sleep(500);
         }
 
         // Заменить exe после выхода текущего процесса и запустить новую версию с --updated (права админа наследуются)

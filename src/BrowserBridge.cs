@@ -32,7 +32,13 @@ namespace NetProbe
             browser.Command += BrowserCommand;
             Controls.Add(browser);browser.BringToFront();
             side.Visible = content.Visible = false;
-            await browser.InitializeAsync(BrowserSnapshot());
+            StartBrowserWatchdog();
+            var init=browser.InitializeAsync(BrowserSnapshot());
+            if(await Task.WhenAny(init,Task.Delay(BrowserInitTimeoutMs))!=init){
+                init.ContinueWith(t=>{var unused=t.Exception;},TaskContinuationOptions.OnlyOnFaulted);
+                throw new TimeoutException("WebView2 did not start within "+BrowserInitTimeoutMs/1000+" s ("+browser.Diagnostics+")");
+            }
+            await init;
             browserUpdates.Tick += (s, e) => { if (!IsDisposed && Visible && WindowState != FormWindowState.Minimized) browser.UpdateSnapshot(BrowserSnapshot()); };
             browserUpdates.Start();
             FormClosed += (s, e) => browserUpdates.Dispose();
@@ -43,11 +49,55 @@ namespace NetProbe
 #if !UI_PREVIEW
             Startup();
 #endif
-            try{await EnableBrowserInterfaceAsync();}catch(Exception ex){Logger.Write(LogLevel.Error,"Background interface initialization: "+ex.Message);}
+            try{await EnableBrowserInterfaceAsync();}catch(Exception ex){UseNativeInterface("Background interface initialization: "+ex.Message);}
         }
         async void ActivateBrowserInterface()
         {
-            try{await EnableBrowserInterfaceAsync();browser.UpdateSnapshot(BrowserSnapshot());await browser.ActivateInterfaceAsync();}catch(Exception ex){Logger.Write(LogLevel.Error,"Interface activation: "+ex.Message);}
+            if(nativeFallback)return;
+            try{await EnableBrowserInterfaceAsync();browser.UpdateSnapshot(BrowserSnapshot());await browser.ActivateInterfaceAsync();}catch(Exception ex){UseNativeInterface("Interface activation: "+ex.Message);}
+        }
+        // --- startup safety: the window must never stay on "Loading" forever ---
+        const int BrowserInitTimeoutMs=30000,BrowserRevealTimeoutMs=12000;
+        bool nativeFallback;
+        bool WebUiShown{get{return browser!=null&&!nativeFallback;}}
+        System.Windows.Forms.Timer browserWatchdog;
+        void StartBrowserWatchdog()
+        {
+            var clock=System.Diagnostics.Stopwatch.StartNew();long loadedAt=-1;bool busy=false;
+            browserWatchdog=new System.Windows.Forms.Timer{Interval=1000};
+            browserWatchdog.Tick+=async(s,e)=>{
+                if(busy)return;
+                if(nativeFallback||browser==null||browser.IsDisposed||browser.Revealed){browserWatchdog.Stop();return;}
+                busy=true;
+                try{
+                    if(!browser.Loaded){
+                        if(clock.ElapsedMilliseconds>BrowserInitTimeoutMs+5000){browserWatchdog.Stop();UseNativeInterface("Interface did not load ("+browser.Diagnostics+")");}
+                        return;
+                    }
+                    if(loadedAt<0)loadedAt=clock.ElapsedMilliseconds;
+                    if(clock.ElapsedMilliseconds-loadedAt<BrowserRevealTimeoutMs)return;
+                    browserWatchdog.Stop();
+                    string state="?";try{state=await browser.ScriptStateAsync();}catch(Exception ex){state=ex.Message;}
+                    Logger.Write(LogLevel.Warn,"Interface loading screen timed out, showing the interface anyway · "+state+" · "+UiStartupTiming.Text());
+                    UiStartupTiming.Save();
+                    await browser.ForceRevealAsync();
+                }catch(Exception ex){Logger.Write(LogLevel.Error,"Interface watchdog: "+ex.Message);}
+                finally{busy=false;}
+            };
+            browserWatchdog.Start();
+            FormClosed+=(s,e)=>browserWatchdog.Dispose();
+        }
+        // WebView2 could not start: keep the app usable with the classic built-in interface.
+        void UseNativeInterface(string reason)
+        {
+            if(nativeFallback||IsDisposed)return;
+            nativeFallback=true;
+            Logger.Write(LogLevel.Error,reason+" · switched to the classic interface · "+UiStartupTiming.Text());
+            UiStartupTiming.Save();
+            try{browserUpdates.Stop();}catch{}
+            try{if(browser!=null){browser.Visible=false;Controls.Remove(browser);}}catch{}
+            side.Visible=content.Visible=true;
+            try{PageFrame pf;if(frames.TryGetValue(curPage,out pf))LayFrame(pf);}catch{}
         }
         public BrowserSurface BrowserInterface { get { return browser; } }
         object BrowserConfig(string name)
