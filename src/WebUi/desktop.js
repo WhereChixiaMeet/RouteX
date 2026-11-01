@@ -72,7 +72,7 @@ app.addEventListener('click',e=>{const power=e.target.closest('[data-power]');if
  if(key.startsWith('cfg.')){e.stopImmediatePropagation();hostCall('config',{name:state.selectedConfig,field:key.slice(4),value:option.dataset.option});return;}
  if(desktopSettingMap[key]||key.startsWith('charHost')||['mode','source','stack','logRetention','asPool','asStrategy','directMethod','probeFamily','gameFilter','charPlacement','charAnchor','fontButtons','fontLarge','fontMedium','fontSmall','language','logDay','notifyEvery','coreUpdateEvery','fontScale','font'].includes(key)){e.stopImmediatePropagation();state[key]=key==='fontScale'?Number(option.dataset.option):option.dataset.option;const label=option.closest('.r-combo').querySelector('[data-combo-trigger]>span');if(label)label.textContent=option.querySelector('span').textContent;closeMenus();saveDesktopSetting(key,option.dataset.option).catch(()=>{});return;}}
 },true);
-app.addEventListener('change',e=>{if(applyingSnapshot)return;const input=e.target;let key=input.dataset.check||input.dataset.setting;if(key){e.stopImmediatePropagation();let value=input.type==='checkbox'?input.checked:input.type==='number'||input.type==='range'?Number(input.value):input.value;saveDesktopSetting(key,value).catch(()=>{});}if(input.dataset.cfgField){e.stopImmediatePropagation();hostCall('config',{name:state.selectedConfig,field:input.dataset.cfgField,value:input.type==='checkbox'?input.checked:input.value}).catch(()=>{});}},true);
+app.addEventListener('change',e=>{if(applyingSnapshot)return;const input=e.target;let key=input.dataset.check||input.dataset.setting;if(/^test(Vpn|Direct)$/.test(key)){e.stopImmediatePropagation();state[key]=input.checked;render();return;}if(key){e.stopImmediatePropagation();let value=input.type==='checkbox'?input.checked:input.type==='number'||input.type==='range'?Number(input.value):input.value;saveDesktopSetting(key,value).catch(()=>{});}if(input.dataset.cfgField){e.stopImmediatePropagation();hostCall('config',{name:state.selectedConfig,field:input.dataset.cfgField,value:input.type==='checkbox'?input.checked:input.value}).catch(()=>{});}},true);
 app.addEventListener('drop',e=>{const column=e.target.closest('[data-list]');if(!column||!dragged)return;e.preventDefault();e.stopImmediatePropagation();hostCall('listMove',{name:column.dataset.list,from:dragged.list,value:dragged.id}).catch(()=>{});dragged=null;},true);
 // Actual measured samples; absent samples remain gaps, never synthetic values.
 // Latency scale follows the bulk of the samples (90th percentile x 1.5, as the classic chart), rounded to a
@@ -130,3 +130,34 @@ render=function(reset=false){functionalRender(reset);
  if(host.settings.Lang!=='en'){const walker=document.createTreeWalker(app,NodeFilter.SHOW_TEXT);const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);for(const node of nodes){if(node.parentElement?.closest('script,style,textarea,[data-server-row],[data-config-row],[data-entry],.r-logrow'))continue;const original=node.textContent.trim(),translated=host.labels[original];if(translated&&translated!==original)node.textContent=node.textContent.replace(original,translated);}}
  icons();
 };
+// Updates: every row has its own action (before, all five buttons sent the same "check-update",
+// so "Update zapret / xray / sing-box" never installed anything and "Check RouteX updates" was silent).
+const updateSettingsBase=updateSettings;
+updateSettings=function(){const template=document.createElement('template');template.innerHTML=updateSettingsBase();
+ template.content.querySelectorAll('[data-action="check-update"]').forEach(b=>b.closest('.r-setting')?.remove());
+ const u=host.updates||{},row=(label,status,action,text,icon,kind='')=>`<div class="r-setting"><div><strong>${esc(label)}</strong>${status?`<small data-update-status>${esc(status)}</small>`:''}</div>${button(text,action,icon,kind)}</div>`;
+ const rows=row('RouteX',u.app||('v'+host.version),'check-update:app',u.available?(u.text||'Update RouteX'):'Check RouteX updates',u.available?'download':'refresh-cw',u.available?'primary':'')
+  +row('zapret',u.zapret,'check-update:zapret','Update zapret','download')
+  +row('xray',u.xray,'check-update:xray','Update xray','download')
+  +row('sing-box (TUN)',u.singbox,'check-update:singbox','Update sing-box','download')
+  +row('Components','','check-update:check','Check updates','refresh-cw');
+ const heading=template.content.querySelector('h3');if(heading)heading.insertAdjacentHTML('afterend',rows);else template.content.firstElementChild?.insertAdjacentHTML('afterbegin',rows);
+ return template.innerHTML;};
+// New RouteX version: a button at the top of the sidebar, as in 3.x.
+function addUpdateButton(){const side=app.querySelector('.rx-sidebar');if(!side)return;side.querySelector('.r-app-update')?.remove();
+ if(!host.updates?.available)return;const brand=side.querySelector('.rx-brand');const html=`<button type="button" class="r-button primary r-app-update" data-action="check-update:app" style="margin:0 12px 10px">${ico('download')}<span>${esc(host.updates.text||'Update RouteX')}</span></button>`;if(brand)brand.insertAdjacentHTML('afterend',html);else side.insertAdjacentHTML('afterbegin',html);}
+const renderBeforeUpdateButton=render;render=function(reset=false){renderBeforeUpdateButton(reset);addUpdateButton();};
+const renderSidebarBeforeUpdateButton=renderSidebar;renderSidebar=function(){renderSidebarBeforeUpdateButton();addUpdateButton();};
+// Update availability and component versions are part of the structure: a change re-renders the page.
+const structureBeforeUpdates=snapshotStructure;snapshotStructure=function(s){return structureBeforeUpdates(s)+JSON.stringify(s.updates||null);};
+structuralSnapshot=snapshotStructure(host);
+// Accessibility: form controls in settings rows take their name from the row title (screen readers read
+// "Kill switch, checkbox" instead of just "checkbox"); textareas, summaries and custom focus targets get
+// the same visible focus ring as buttons.
+function labelControls(root=app){for(const e of root.querySelectorAll('input:not([type=hidden]),textarea,select,button')){
+ if(e.getAttribute('aria-label')||e.getAttribute('aria-labelledby')||e.closest('label')?.textContent.trim()||e.id&&document.querySelector(`label[for="${CSS.escape(e.id)}"]`))continue;
+ if(e.tagName==='BUTTON'&&e.textContent.trim())continue;
+ const row=[e.closest('.r-setting'),e.closest('.r-field'),e.closest('.r-check'),e.parentElement?.closest('div')].find(r=>r&&r.querySelector('strong,span:not(:empty),label')?.textContent.trim());const title=row?.querySelector('strong,span,label')?.textContent.trim()||e.placeholder||e.title||e.dataset.check||e.dataset.setting||e.dataset.action||'';
+ if(title)e.setAttribute('aria-label',title);}}
+new MutationObserver(()=>labelControls()).observe(app,{childList:true,subtree:true});labelControls();
+const a11yStyle=document.createElement('style');a11yStyle.textContent='#routex-routing-concept .rx-window textarea:focus-visible,#routex-routing-concept .rx-window summary:focus-visible,#routex-routing-concept .rx-window [tabindex]:focus-visible{outline:2px solid var(--rx-accent);outline-offset:3px}';document.head.append(a11yStyle);

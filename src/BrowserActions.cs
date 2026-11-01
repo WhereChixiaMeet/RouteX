@@ -114,7 +114,13 @@ namespace NetProbe
                     using(var dialog=new FolderBrowserDialog{Description="Select the DPI source folder",SelectedPath=st.ZapretPath,ShowNewFolderButton=true})if(dialog.ShowDialog(this)==DialogResult.OK)BrowserSetting("zapretDir",dialog.SelectedPath);return null;
                 }
                 case "default-dpi-folder":return BrowserSetting("zapretDir","");
-                case "check-update":CheckUpdates(true);CheckAppUpdate(false);return null;
+                case "check-update":
+                    if(id=="zapret")UpdateZapretUi(new FlatButton(Tx("Обновить zapret")));
+                    else if(id=="xray")UpdateCore(true);
+                    else if(id=="singbox")UpdateSingBoxUi(true);
+                    else if(id=="app"){if(appRelease!=null)DoAppUpdate();else CheckAppUpdate(true);}
+                    else{CheckUpdates(true);CheckAppUpdate(false);}
+                    return null;
                 case "install-core":if(id=="xray")UpdateCore(true);else if(id=="singbox")UpdateSingBoxUi(true);else if(id=="zapret")BrowserNativeButton(PgSettings,"Обновить zapret");else throw new ArgumentException("Unknown core");return null;
                 case "export-theme":{
                     using(var dialog=new SaveFileDialog{Filter="JSON (*.json)|*.json",FileName="routex-theme.json"})if(dialog.ShowDialog(this)==DialogResult.OK){

@@ -156,9 +156,10 @@ namespace NetProbe
                 logging=new {errorsOnly=chkErrOnly.Checked,routesOnly=chkRouteOnly.Checked,days=cbLogDay.Items.OfType<DayItem>().Select(d=>new {id=d.Day.Date==DateTime.Today?"today":d.Day.ToString("yyyy-MM-dd"),name=d.ToString()}).ToArray()},
                 monitorInfo=review?"UI preview · simulated values · no VPN connection":infoLabel.Text,routeStatus=shownStatus,routeDetail=review?"xray · Personal config · TUN · Preview":board.Line1,routeDetail2=review?"VPN 52 ms · Direct 12 ms · Switches: 0 · Preview":board.Line2,engine=EngineText(),subscriptionState=review?(shownActive&&st.Source==1?"Connected":"Disconnected"):xBoard.State,subscriptionActive=review?(shownActive&&st.Source==1):xm.State==XState.Connected,
                 tg=new {running=TgProxy.Running,state=tgpState.Text,address=tgpAddr.Text,link=tgpLink.Text,connections=TgStats.Active,total=TgStats.Total,ws=TgStats.Ws,cf=TgStats.Cf,sent=TgConst.Human(TgStats.Up),received=TgConst.Human(TgStats.Down)},
-                updates=new {available=btnAppUpd.Visible,text=btnAppUpd.Text}
+                updates=new {available=appRelease!=null,text=appRelease==null?"":btnAppUpd!=null&&!btnAppUpd.Enabled?btnAppUpd.Text:"Update to "+appRelease.Tag,app=LabelText(lAppVer),zapret=LabelText(lZVer),xray=LabelText(lXVer),singbox=LabelText(lSVer)}
             };
         }
+        static string LabelText(Label label){return label==null||label.IsDisposed?"":label.Text;}
         static string BrowserString(Dictionary<string,object> args,string name,string fallback="") { object value;return args.TryGetValue(name,out value)?Convert.ToString(value):fallback; }
         void BrowserCommand(Dictionary<string,object> message)
         {
