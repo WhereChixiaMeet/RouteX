@@ -47,33 +47,6 @@ namespace NetProbe
 
         public static string VpnProbe { get { return Path.Combine(CurlProber.WorkDir, "bin", "netprobe-vpn.exe"); } }
         public const string DirectProbe = "netprobe-direct.exe";
-        // long-lived monitor probe (ProbeAgentHost): same process name as the curl copy, own folder
-        public static string VpnAgent { get { return ProbeAgentHost.PathOf("netprobe-vpn.exe"); } }
-        static DateTime agentCheckedAt = DateTime.MinValue; static bool agentRouted = true;
-        // The WireSock config that is actually running lists the agent (a tunnel adopted from a version before
-        // 4.0.7 lists only the curl copy; then the VPN channel keeps using curl until the next connect).
-        public static bool AgentInTunnel()
-        {
-            try
-            {
-                string f = WiresockRunner.RuntimeFile;
-                if (!File.Exists(f)) return true;
-                var t = File.GetLastWriteTimeUtc(f);
-                if (t == agentCheckedAt) return agentRouted;
-                string text = File.ReadAllText(f);
-                bool allowList = false, has = false;
-                foreach (var line in text.Split('\n'))
-                {
-                    var l = line.Trim();
-                    if (!l.StartsWith("AllowedApps", StringComparison.OrdinalIgnoreCase)) continue;
-                    allowList = true;
-                    if (l.IndexOf(VpnAgent, StringComparison.OrdinalIgnoreCase) >= 0) has = true;
-                }
-                agentRouted = !allowList || has; agentCheckedAt = t;
-                return agentRouted;
-            }
-            catch { return true; }
-        }
 
         public Router()
         {
@@ -94,7 +67,7 @@ namespace NetProbe
         {
             var strictAll = AppLists.Get(AppLists.VpnOnlyApps);
             var lists = strictOnly
-                ? TunLists.FromLists(strictAll.Concat(new[] { VpnProbe, VpnAgent }), new string[0])
+                ? TunLists.FromLists(strictAll.Concat(new[] { VpnProbe }), new string[0])
                 : TunLists.FromLists(AppLists.Get(AppLists.HybridApps).Concat(strictAll), AppLists.Get(TunExclKey(st)));
             lists.StrictOnly = strictOnly;
             return lists;
@@ -319,13 +292,13 @@ namespace NetProbe
             var allow = new List<string>(); var deny = new List<string>();
             if (strictOnly)
             {
-                allow.AddRange(strict); allow.Add(VpnProbe); allow.Add(VpnAgent);
+                allow.AddRange(strict); allow.Add(VpnProbe);
             }
             else
             {
                 allow.AddRange(AppLists.AppsOnly(AppLists.HybridApps)); allow.AddRange(strict);
                 deny.AddRange(AppLists.AppsOnly(TunExclKey(st)));
-                if (allow.Count > 0) { allow.Add(VpnProbe); allow.Add(VpnAgent); } else deny.Add(DirectProbe); // пусто = весь трафик через VPN, кроме пробника «напрямую»
+                if (allow.Count > 0) allow.Add(VpnProbe); else deny.Add(DirectProbe); // пусто = весь трафик через VPN, кроме пробника «напрямую»
             }
             allow = allow.Where(a => a.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             deny = deny.Where(a => a.Length > 0 && !allow.Contains(a, StringComparer.OrdinalIgnoreCase)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
