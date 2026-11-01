@@ -17,6 +17,7 @@ namespace NetProbe
         int anchor = -1, top, hover = -1;
         bool dragThumb; int dragY, dragTop;
         public bool MultiSelect, ShowIcons;
+        public bool Plain;
         public Func<string, string> RightText;
         // Presentation only: Items and selection/copy/drag values keep their original process names.
         public Func<string, string> DisplayText;
@@ -192,7 +193,7 @@ namespace NetProbe
 
         protected override void OnPaint(PaintEventArgs e)
         {
-            var g = e.Graphics; Color back = Theme.Classic ? Theme.Input : Theme.Card;
+            var g = e.Graphics; Color back = Plain ? Theme.Bg : Theme.Classic ? Theme.Input : Theme.Card;
             if (Theme.Translucent && !Theme.Classic) Gfx.Backdrop(this, g); else g.Clear(back);
             int rh = RowH, w = Width - BarW - 6;
             for (int i = top; i < Items.Count && (i - top) * rh < Height; i++)

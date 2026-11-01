@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Drawing;
 using System.Windows.Forms;
 
@@ -117,7 +118,7 @@ namespace NetProbe
             else if (!win11) Gfx.DrawRound(g, Theme.Border, new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f), Theme.S(10));
             else using (var p = new Pen(Theme.Border)) g.DrawRectangle(p, 0, 0, Width - 1, Height - 1);
             int pad = Theme.S(12);
-            Gfx.Text(g, "NETPROBE", Theme.Small, Theme.Dim, new Rectangle(pad, Theme.S(6), Theme.S(120), Theme.S(18)), TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+            Gfx.Text(g, "RouteX", Theme.Small, Theme.Dim, new Rectangle(pad, Theme.S(6), Theme.S(120), Theme.S(18)), TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
             Gfx.Text(g, Header, Theme.Small, Theme.Muted, new Rectangle(Width - pad - Theme.S(170), Theme.S(6), Theme.S(170), Theme.S(18)), TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
             int y = Theme.S(28), rh = Theme.S(30);
             var vis = MonRows.Visible(showPing, showSpeed);
@@ -167,11 +168,13 @@ namespace NetProbe
         bool showPing = true, showSpeed = false;
 
         public MiniMonitor() { Height = Theme.S(76); Cursor = Cursors.Hand; }
-        public bool Any { get { return showPing || showSpeed; } }
+        public int RowMask = 15;
+        int[] VisibleRows { get { return MonRows.Visible(showPing, showSpeed).Where(i => (RowMask & (1 << i)) != 0 && (i < 2 ? showPing : showSpeed)).ToArray(); } }
+        public bool Any { get { return VisibleRows.Length > 0; } }
         public void SetParts(bool ping, bool speed)
         {
             showPing = ping; showSpeed = speed;
-            Height = Theme.S(26) + Theme.S(25) * MonRows.Visible(ping || !speed, speed).Length;
+            Height = Theme.S(26) + Theme.S(25) * VisibleRows.Length;
             Invalidate();
         }
 
@@ -202,7 +205,7 @@ namespace NetProbe
             int y = Theme.S(22), rh = Theme.S(25);
             int valW = Theme.S(58);
             if (!Any) return;
-            var vis = MonRows.Visible(showPing, showSpeed);
+            var vis = VisibleRows;
             // ширина подписей — по самой длинной (чтобы «↓ Download» не обрезалось), но не больше 45% ширины
             int nameW = Theme.S(40);
             foreach (var vi in vis) nameW = Math.Max(nameW, TextRenderer.MeasureText(rows[vi].Name, Theme.Small).Width + Theme.S(2));

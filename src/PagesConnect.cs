@@ -126,7 +126,7 @@ namespace NetProbe
         DarkCombo cbRunMode; Label lRouteHint, lRouteLock;
         bool tunLockShown;
         const string TunLockMessage = "TUN settings are locked. Turn off VPN to edit.";
-        string NormalRouteHint { get { return Tx("DPI глобален: касается всего вне туннеля. Домены для DPI — на вкладке DPI  ·  Приоритет: «Строго VPN» > домен > приложение"); } }
+        string NormalRouteHint { get { return "Application routing"; } }
         void ApplyTunLockUi(bool locked)
         {
             if (listCards == null || lRouteHint == null || lRouteHint.IsDisposed) return;
@@ -205,7 +205,7 @@ namespace NetProbe
             listCards = new ListCard[3];
             for (int i = 0; i < 3; i++)
             {
-                var lc = new ListCard { CheckerIcon = () => appIconBmp }; listCards[i] = lc;
+                var lc = new ListCard { CheckerIcon = () => appIconBmp, Plain = !Theme.Classic }; lc.Box.Plain = !Theme.Classic; listCards[i] = lc;
                 lc.BAdd.Click += (s, e) =>
                 {
                     if (!CanEditList(lc.Key)) return;
@@ -258,20 +258,39 @@ namespace NetProbe
 
             p.Controls.AddRange(new Control[] { board, cPrim, cBack, cFail, lRouteHint, lRouteLock });
             board.Controls.Add(cbRunMode);
+            cPrim.Visible = cBack.Visible = false;
+            board.Controls.AddRange(new Control[] { cbPrimary, cbBackup, tgBackup });
+            routingSource = new DarkCombo(); routingSource.Items.AddRange(new object[] { "Configs", "Subscriptions" });
+            routingSource.SelectedIndexChanged += (s, e) => { if (!syncingRoutingSource && routingSource.UserPick) PickSource(routingSource.SelectedIndex); };
+            var serverPick = new DarkCombo();
+            serverPick.SelectedIndexChanged += (s, e) => { if (!serverPick.UserPick || serverPick.SelectedIndex < 0) return; var list = ServerStore.Snapshot(); if (serverPick.SelectedIndex < list.Count) { st.ActiveServer = list[serverPick.SelectedIndex].Id; st.Save(); } };
+            board.Controls.AddRange(new Control[] { routingSource, serverPick });
+            var sourceLabel = HeroLabel("Active source", board); var primaryLabel = HeroLabel(Tx("Основной VPN"), board);
+            var modeLabel = HeroLabel(Tx("Режим подключения"), board); var backupLabel = HeroLabel(Tx("Резервный VPN"), board);
+            var options = new FlatButton(Tx("Настройки подключения")) { Glyph = "\uE713" }.AutoW();
+            options.Click += (s, e) => { st.ConnectOptionsOpen = !st.ConnectOptionsOpen; st.Save(); relayConnect(); };
+            p.Controls.Add(options);
+            p.Paint += (s, e) => {
+                var visible = listCards.Where(c => c.Visible).OrderBy(c => c.Left).ToList();
+                using (var pen = new Pen(Theme.Border)) for (int i = 1; i < visible.Count; i++) e.Graphics.DrawLine(pen, visible[i].Left - Theme.S(6), visible[i].Top + Theme.S(4), visible[i].Left - Theme.S(6), visible[i].Bottom - Theme.S(4));
+            };
             Action lay = () =>
             {
                 int L = Theme.S(26), W = PW(p) - L * 2, gap = Theme.S(12); // кнопки сверху — по всей ширине окна, содержимое — левее колонки модулей
                 PlaceTopButtons(topRouting, p.ClientSize.Width - L, Theme.S(22));
                 int y = Theme.S(80);
-                board.SetBounds(L, y, W, Theme.S(84));
-                cbRunMode.Location = new Point(board.Width - Theme.S(14) - cbRunMode.Width, Theme.S(16));
-                y = board.Bottom + gap;
-                int ch = Theme.S(92), ip = Theme.S(16), hw = (W - gap) / 2;
-                cPrim.SetBounds(L, y, hw, ch); cBack.SetBounds(L + hw + gap, y, W - hw - gap, ch);
-                cbPrimary.SetBounds(ip, Theme.S(48), hw - ip * 2, cbPrimary.Height);
-                tgBackup.Location = new Point(cBack.Width - ip - tgBackup.Width, Theme.S(12));
-                cbBackup.SetBounds(ip, Theme.S(48), cBack.Width - ip * 2, cbBackup.Height);
-                y += ch + gap;
+                board.SetBounds(L, y, W, Theme.S(238)); board.Reserve = 0;
+                int ip = Theme.S(20), available = W - ip * 2, col = (available - gap * 2) / 3;
+                sourceLabel.SetBounds(ip, Theme.S(96), col, Theme.S(20)); routingSource.SetBounds(ip, Theme.S(120), col, routingSource.Height);
+                primaryLabel.SetBounds(ip + col + gap, Theme.S(96), col, Theme.S(20));
+                cbPrimary.SetBounds(primaryLabel.Left, Theme.S(120), col, cbPrimary.Height); serverPick.Bounds = cbPrimary.Bounds;
+                modeLabel.SetBounds(primaryLabel.Left + col + gap, Theme.S(96), available - col * 2 - gap * 2, Theme.S(20)); cbRunMode.SetBounds(modeLabel.Left, Theme.S(120), modeLabel.Width, cbRunMode.Height);
+                bool subs = ActiveSource() == Source.Subs; cbPrimary.Visible = !subs; serverPick.Visible = subs; serverPick.Enabled = !TunSettingsLocked;
+                if (subs) { var list = ServerStore.Snapshot(); var names = list.Select(a => a.Name).ToArray(); if (!serverPick.Items.Cast<string>().SequenceEqual(names)) { serverPick.Items.Clear(); serverPick.Items.AddRange(names); } serverPick.SelectedIndex = list.FindIndex(a => a.Id == st.ActiveServer); }
+                primaryLabel.Text = subs ? Tx("Сервер") : Tx("Основной VPN");
+                tgBackup.Location = new Point(ip, Theme.S(187)); backupLabel.SetBounds(tgBackup.Right + Theme.S(10), Theme.S(190), Theme.S(125), Theme.S(20));
+                cbBackup.SetBounds(backupLabel.Right + Theme.S(12), Theme.S(183), Math.Max(Theme.S(120), available - backupLabel.Right + ip - Theme.S(12)), cbBackup.Height);
+                y = board.Bottom + Theme.S(8); options.Location = new Point(L, y); y = options.Bottom + Theme.S(6);
                 // строка аварийного переключения; в узком окне переносится на вторую строку
                 int x = ip, cy = Theme.S(12), rowH = Theme.S(32), maxX = W - ip;
                 foreach (var pair in new[] { Tuple.Create((Control)lF, (Control)nFailover), Tuple.Create((Control)lR, (Control)nRecover), Tuple.Create((Control)lT, (Control)nRetry) })
@@ -288,7 +307,8 @@ namespace NetProbe
                 }
                 int failH = cy + Theme.S(36);
                 cFail.SetBounds(L, y, W, failH);
-                y += failH + Theme.S(6);
+                cFail.Visible = st.ConnectOptionsOpen;
+                if (cFail.Visible) y += failH + Theme.S(6);
                 int lockOffset = tunLockShown ? Theme.S(24) : 0;
                 lRouteLock.SetBounds(L + Theme.S(2), y, Theme.S(20), Theme.S(18));
                 lRouteHint.SetBounds(L + Theme.S(2) + lockOffset, y, W - lockOffset, Theme.S(18)); y += Theme.S(18) + Theme.S(6);

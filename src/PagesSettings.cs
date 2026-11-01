@@ -98,6 +98,7 @@ namespace NetProbe
                     maxR = Math.Max(maxR, c.Right); maxB = Math.Max(maxB, c.Bottom);
                 }
                 card.Size = new Size(Math.Max(maxR + pad, Theme.S(420)), Math.Max(maxB + Theme.S(14), top + Theme.S(10)));
+                if (key == "set.fonts") ConfigureFontCard(card);
                 RegisterModule(card, key, PgSettings, tab);
             }
             setTabs.Selected += k => ShowSettingsTab(k);

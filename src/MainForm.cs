@@ -16,7 +16,7 @@ namespace NetProbe
 {
     public partial class MainForm : Form
     {
-        public const string Version = "3.5.2";
+        public const string Version = "3.6.0";
         Settings st;
         readonly ChannelMonitor monVpn = new ChannelMonitor("vpn"), monDir = new ChannelMonitor("direct");
         volatile Prober pVpn, pDir;
@@ -597,12 +597,13 @@ namespace NetProbe
             miniMon.Click += (s, e) => SelectPage(PgMonitor);
             Ui.Tip().SetToolTip(miniMon, Tx("Мониторинг: VPN и напрямую — клик открывает вкладку Monitor"));
             side.Controls.Add(miniMon);
+            ConfigureMiniMenu();
             laySide = () =>
             {
                 sideStatus.SetBounds(Theme.S(20), side.Height - Theme.S(96), side.Width - Theme.S(30), Theme.S(82));
                 miniMon.SetBounds(Theme.S(12), sideStatus.Top - Theme.S(4) - miniMon.Height, side.Width - Theme.S(26), miniMon.Height);
                 int navBottom = navs.Count > 0 ? navs.Max(n => n.Bottom) : 0;
-                miniMon.Visible = miniMon.Any && miniMon.Top > navBottom + Theme.S(8); // мало места по высоте — не налезаем на меню; показывать нечего — нет окошка
+                miniMon.Visible = miniMon.Top > navBottom + Theme.S(8); // retain the menu when every metric is hidden
             };
             side.Resize += (s, e) => laySide(); laySide();
         }

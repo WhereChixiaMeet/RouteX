@@ -27,7 +27,7 @@ namespace NetProbe
             g.DrawImage(img, new Rectangle(0, 0, c.Width, c.Height), r.X * sx, r.Y * sy, r.Width * sx, r.Height * sy, GraphicsUnit.Pixel);
             g.InterpolationMode = im;
             for (var x = c.Parent; x != null && x != page; x = x.Parent)
-                if (x is CardPanel || x is StatusBoard) using (var b = new SolidBrush(Theme.CardFill)) g.FillRectangle(b, 0, 0, c.Width, c.Height);
+                if ((x is CardPanel && !((CardPanel)x).Plain) || x is StatusBoard) using (var b = new SolidBrush(Theme.CardFill)) g.FillRectangle(b, 0, 0, c.Width, c.Height);
                 else if (!(x is CardPanel) && !(x is StatusBoard) && x.BackColor.A == 255 && x.BackgroundImage == null && x != page && !(x.Parent == page && x.Dock == DockStyle.Fill)) { using (var b = new SolidBrush(x.BackColor)) g.FillRectangle(b, 0, 0, c.Width, c.Height); }
         }
 
@@ -409,6 +409,7 @@ namespace NetProbe
     public class CardPanel : Panel
     {
         public string Title, Sub;
+        public bool Plain;
         // 3.2: модуль интерфейса — карточку можно перетащить за заголовок (на «Настройки» / обратно на свою вкладку) или ПКМ → меню
         public string ModuleKey;
         public event Action<CardPanel> ModuleMenu;
@@ -478,8 +479,7 @@ namespace NetProbe
             var g = e.Graphics; Gfx.Backdrop(this, g); Gfx.Hq(g);
             var r = new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f);
             if (Theme.Classic) r = new RectangleF(0, 0, Width, Height);
-            Gfx.Panel(g, r, Theme.R(10), Theme.Card);
-            Skin.CardDecor(g, r);
+            if (!Plain) { Gfx.Panel(g, r, Theme.R(10), Theme.Card); Skin.CardDecor(g, r); }
             // карточку тащат: акцентная рамка — видно, что именно переносится
             if (dragging) using (var pen = new Pen(Theme.Accent, Theme.S(2)) { DashStyle = System.Drawing.Drawing2D.DashStyle.Dash }) g.DrawRectangle(pen, Theme.S(1), Theme.S(1), Width - Theme.S(3), Height - Theme.S(3));
             if (!string.IsNullOrEmpty(Title)) Gfx.Text(g, Title, Theme.H2, Theme.Text, new Rectangle(Theme.S(16), Theme.S(10), Width - Theme.S(32), Theme.S(24)), TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
@@ -551,7 +551,7 @@ namespace NetProbe
         public const int WindowSec = 300;
         public readonly List<double> A = new List<double>(), B = new List<double>();
         public readonly List<DateTime> TA = new List<DateTime>(), TB = new List<DateTime>();
-        readonly System.Windows.Forms.Timer scroll = new System.Windows.Forms.Timer { Interval = 1000 };
+        readonly System.Windows.Forms.Timer scroll = new System.Windows.Forms.Timer { Interval = 33 };
         public LatencyChart() { scroll.Tick += (s, e) => { if (Visible && !Hist && (A.Count > 0 || B.Count > 0)) Invalidate(); }; scroll.Start(); }
         protected override void Dispose(bool disposing) { if (disposing) scroll.Dispose(); base.Dispose(disposing); }
         public string NameA = "VPN", NameB = Tx("Напрямую");

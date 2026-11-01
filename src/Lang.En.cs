@@ -7,6 +7,8 @@ namespace NetProbe
         // ключ — русская строка из кода, значение — английский текст
         static readonly Dictionary<string, string> En = new Dictionary<string, string>
         {
+            { "Настройки подключения", "Connection settings" },
+            { "Режим подключения", "Connection mode" },
             { "Вышла tg-ws-proxy ", "tg-ws-proxy released " },
             { ": встроенный TG Proxy основан на ", ": the built-in TG Proxy is based on " },
             { " — изменения придут с обновлением RouteX", " — the changes will arrive with a RouteX update" },

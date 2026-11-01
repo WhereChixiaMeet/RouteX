@@ -12,7 +12,7 @@ namespace NetProbe
 {
     public partial class MainForm
     {
-        ThemedList lbStrat; TextBox tbStratName, tbStratArgs, tbZList; DarkCombo cbZList; Label lStratInfo, lZInfo;
+        ThemedList lbStrat; TextBox tbStratName, tbStratArgs, tbZList, tbStratSearch; DarkCombo cbZList; Label lStratInfo, lZInfo, lStratCount;
         Panel dpiStratTab, dpiListTab, dpiSitesTab; FlatButton tabStrat, tabLists, tabSites, bStratUse;
         ListCard dpiSites, dpiNoTouch; DarkCombo cbGame; Toggle tgDpiPar; Label lDpiState;
         string zListLoaded; bool loadingStrat, loadingZ;
@@ -31,6 +31,9 @@ namespace NetProbe
             var tt = Ui.Tip();
             // ---- слева: список стратегий + маленькая панель кнопок ----
             var left = new CardPanel { Title = Tx("Стратегии") };
+            tbStratSearch = Ui.TextBox(); ((ThemedTextBox)tbStratSearch).Cue = "Search strategies";
+            lStratCount = Ui.Label("", Theme.Small, Theme.Muted); lStratCount.BackColor = Theme.Card;
+            tbStratSearch.TextChanged += (s, e) => { var selected = lbStrat.SelectedItem; FlushStrategy(); FillStrategies(selected); };
             lbStrat = new ThemedList { BoldItem = n => n == st.DpiStrategy, RightText = n => n == st.DpiStrategy ? Tx("активна") : null };
             lbStrat.SelectedIndexChanged += (s, e) => LoadStrategy();
             lbStrat.DoubleClick += (s, e) => UseStrategy();
@@ -66,7 +69,7 @@ namespace NetProbe
                 }
             };
             var leftBtns = new[] { bNew, bCopy, bDel, bImpAll, bImpBat };
-            left.Controls.Add(lbStrat); left.Controls.AddRange(leftBtns);
+            left.Controls.Add(lbStrat); left.Controls.AddRange(leftBtns); left.Controls.Add(tbStratSearch); left.Controls.Add(lStratCount);
 
             // ---- справа: вкладки «Стратегия» / «Списки zapret» ----
             var right = new CardPanel();
@@ -164,7 +167,9 @@ namespace NetProbe
                 left.SetBounds(L, 0, lw, H);
                 int bx = lw - ip;
                 for (int i = leftBtns.Length - 1; i >= 0; i--) { bx -= leftBtns[i].Width; leftBtns[i].Location = new Point(bx, Theme.S(8)); bx -= Theme.S(3); }
-                lbStrat.SetBounds(Theme.S(8), Theme.S(44), lw - Theme.S(16), H - Theme.S(52));
+                tbStratSearch.SetBounds(ip, Theme.S(44), lw - ip * 2, tbStratSearch.Height);
+                lbStrat.SetBounds(Theme.S(8), tbStratSearch.Bottom + Theme.S(10), lw - Theme.S(16), Math.Max(Theme.S(80), H - tbStratSearch.Bottom - Theme.S(48)));
+                lStratCount.SetBounds(ip, H - Theme.S(28), lw - ip * 2, Theme.S(20));
                 right.SetBounds(L + lw + gap, 0, W - lw - gap, H);
                 int rw = right.Width;
                 tabStrat.Location = new Point(ip, Theme.S(10)); tabLists.Location = new Point(tabStrat.Right + Theme.S(6), Theme.S(10)); tabSites.Location = new Point(tabLists.Right + Theme.S(6), Theme.S(10));
@@ -238,7 +243,10 @@ namespace NetProbe
         {
             if (lbStrat == null || lbStrat.IsDisposed) return;
             lbStrat.BeginUpdate(); lbStrat.Items.Clear();
-            lbStrat.Items.AddRange(DpiConfigs.Names());
+            var all = DpiConfigs.Names();
+            var shown = all.Where(n => tbStratSearch == null || n.IndexOf(tbStratSearch.Text.Trim(), StringComparison.OrdinalIgnoreCase) >= 0).ToArray();
+            lbStrat.Items.AddRange(shown);
+            if (lStratCount != null) lStratCount.Text = shown.Length + " / " + all.Count + " strategies";
             lbStrat.EndUpdate();
             if (select != null && lbStrat.Items.Contains(select)) lbStrat.SelectedItem = select;
             else if (lbStrat.Items.Count > 0) lbStrat.SelectedIndex = 0;

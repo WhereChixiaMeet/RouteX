@@ -138,6 +138,7 @@ namespace NetProbe
 
         void UpdateTopButtons()
         {
+            SyncRoutingSource();
             bool on = AnyActive, dpi = router.ManualDpi || router.Dpi.Running;
             string why = ChipReasons()[(int)st.RunMode];
             foreach (var t in topButtons.ToList())

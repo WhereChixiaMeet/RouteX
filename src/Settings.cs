@@ -194,6 +194,8 @@ namespace NetProbe
         public int DownAfterFails = 3;       // «связь потеряна» — только после стольких сбоев подряд (одиночный сбой — потеря опроса)
         public bool WidgetSpeedOn { get { return SpeedOn && WidgetSpeed; } }
         public bool SideSpeedOn { get { return SpeedOn && SideSpeed; } }
+        public bool SideVpn = true, SideDirect = true, SideDownload = true, SideUpload = true;
+        public bool ConnectOptionsOpen = false, SubsOptionsOpen = false, SubsCompact = true;
         public bool SpeedChartOn { get { return SpeedOn && SpeedChart; } }
         public bool SpeedDefaults = false;
         public bool MonDefaults312 = false;  // 3.1.2: один раз у всех — пинг и скорость включены (дальше можно выключить)

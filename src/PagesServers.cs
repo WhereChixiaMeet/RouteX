@@ -82,6 +82,10 @@ namespace NetProbe
             var bFav = IconBtn("", Tx("Избранное"), tt);
             bFav.Click += (s, e) => ToggleFav();
             var bDel = IconBtn("", Tx("Удалить"), tt);
+            var bOptions = new FlatButton("Autoswitch") { Glyph = "\uE713" }.AutoW();
+            bOptions.Click += (s, e) => { st.SubsOptionsOpen = !st.SubsOptionsOpen; st.Save(); if (relayServers != null) relayServers(); };
+            var bColumns = new FlatButton("All columns") { Glyph = "\uE8FD" }.AutoW();
+            bColumns.Click += (s, e) => { st.SubsCompact = !st.SubsCompact; st.Save(); ApplySrvColumns(); ApplyCompactServers(); bColumns.Text = st.SubsCompact ? "All columns" : "Compact view"; bColumns.AutoW(); if (relayServers != null) relayServers(); };
             bDel.Click += (s, e) => { var sel = SelServers(); if (sel.Count > 0 && MessageBox.Show(this, Tx("Удалить серверов: ") + sel.Count + "?", "RouteX", MessageBoxButtons.YesNo) == DialogResult.Yes) ServerStore.Remove(sel.Select(x => x.Id)); };
             tbSrvSearch = Ui.TextBox(); tbSrvSearch.Width = Theme.S(180); ((ThemedTextBox)tbSrvSearch).Cue = Tx("Поиск");
             tbSrvSearch.TextChanged += (s, e) => FillServers();
@@ -121,6 +125,7 @@ namespace NetProbe
             for (int i = 0; i < cols.Length; i++) srvGrid.Columns.Add(cols[i][0], cols[i][1]);
             srvGrid.AllowUserToOrderColumns = true;
             ApplySrvColumns();
+            ApplyCompactServers();
             srvGrid.ColumnWidthChanged += (s, e) => { ClampSrvColumn(e.Column); SaveSrvColumns(); };
             srvGrid.ColumnDisplayIndexChanged += (s, e) => { if (!applyingCols && srvGrid.Columns["td"].DisplayIndex != srvGrid.Columns.Count - 1) BeginInvoke((Action)(() => { applyingCols = true; try { PinTotal(); } finally { applyingCols = false; } SaveSrvColumns(); })); else SaveSrvColumns(); };
             // GEO: флаг вместо кода страны (картинка с flagcdn, кэш в config\runtime\flags)
@@ -200,7 +205,7 @@ namespace NetProbe
             srvSplit.MouseMove += (s, e) => { if (!splitDrag) return; st.SrvRightW = Math.Max(300, Math.Min(900, splitW0 - (int)Math.Round((Cursor.Position.X - splitX0) / Theme.Scale))); if (relayServers != null) relayServers(); };
             srvSplit.MouseUp += (s, e) => { if (!splitDrag) return; splitDrag = false; srvSplit.Capture = false; st.Save(); };
 
-                        p.Controls.AddRange(new Control[] { xBoard, bImp, bSubs, btnUpdSub, bTest, bSpeed, srcSwitch, bFav, bDel, tbSrvSearch, btnCore, btnSb, btnCoresUpd, srvTabs, bSortAll, lSrvInfo, gridCard, asHost, srvSplit });
+                        p.Controls.AddRange(new Control[] { xBoard, bImp, bSubs, btnUpdSub, bTest, bSpeed, srcSwitch, bFav, bDel, tbSrvSearch, btnCore, btnSb, btnCoresUpd, srvTabs, bSortAll, lSrvInfo, gridCard, asHost, srvSplit, bOptions, bColumns });
             tt.SetToolTip(bImp, Tx("Из буфера")); tt.SetToolTip(bSubs, Tx("Подписки"));
             var rowBtns = new FlatButton[] { bImp, bSubs, btnUpdSub, bTest, bSpeed };
             Action lay = () =>
@@ -235,19 +240,22 @@ namespace NetProbe
                 y += bImp.Height + Theme.S(6);
                 // вторая строка: вкладки подписок слева, поиск справа (над правой колонкой)
                 // правая колонка (модули): ширина тянется разделителем; модулей нет — таблица на всю ширину, поиск — справа от вкладок
-                bool rightOn = asBody.Controls.OfType<CardPanel>().Any();
+                bool rightOn = st.SubsOptionsOpen && asBody.Controls.OfType<CardPanel>().Any();
                 // ширина колонки — по ИСХОДНОЙ ширине карточек (BaseW): растянутая ширина давала «разгон» колонки при каждой перекладке
                 int widest = asBody.Controls.OfType<CardPanel>().Select(c => c.BaseW).DefaultIfEmpty(0).Max() + Theme.S(16);
                 int rw = rightOn ? Math.Max(Math.Max(Theme.S(360), widest), Math.Min(W - Theme.S(420), Theme.S(st.SrvRightW))) : 0;
                 if (rightOn) rw = Math.Max(Theme.S(300), Math.Min(rw, W - Theme.S(420) - gap)); // таблица серверов не уже 420
                 int lw = rightOn ? W - rw - gap : W;
-                int sw = rightOn ? rw : Theme.S(240);
-                int tabsW = (rightOn ? lw : W - sw - gap) - bSortAll.Width - Theme.S(6);
+                int sw = rightOn ? rw : Math.Min(Theme.S(200), W / 4);
+                int toolsW = bColumns.Width + bOptions.Width + Theme.S(12);
+                int tabsW = Math.Max(Theme.S(150), (rightOn ? lw : W - sw - gap) - bSortAll.Width - Theme.S(6) - toolsW);
                 srvTabs.SetBounds(L, y, tabsW, Theme.S(32));
                 bSortAll.Location = new Point(L + tabsW + Theme.S(6), y + (Theme.S(32) - bSortAll.Height) / 2);
+                bOptions.Location = new Point(bSortAll.Right + Theme.S(6), y); bColumns.Location = new Point(bOptions.Right + Theme.S(6), y);
                 tbSrvSearch.SetBounds(L + W - sw, y + (Theme.S(32) - tbSrvSearch.Height) / 2, sw, tbSrvSearch.Height); y += Theme.S(36);
                 int h = p.ClientSize.Height - Theme.S(18) - y;
                 gridCard.SetBounds(L, y, lw, h);
+                ApplyCompactServers();
                 asHost.Visible = rightOn; srvSplit.Visible = rightOn;
                 if (rightOn)
                 {
@@ -619,6 +627,7 @@ namespace NetProbe
             }
             if (first >= 0 && first < srvGrid.Rows.Count) try { srvGrid.FirstDisplayedScrollingRowIndex = first; } catch { }
             if (sel.Count == 0) srvGrid.ClearSelection();
+            ApplyCompactServers();
             if (!xTesting) lSrvInfo.Text = Tx("Серверов: ") + list.Count + "  ·  " + Tx("двойной клик — подключить, Ctrl+V — импорт");
         }
 
