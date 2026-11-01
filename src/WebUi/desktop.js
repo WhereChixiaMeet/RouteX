@@ -78,7 +78,7 @@ app.addEventListener('drop',e=>{const column=e.target.closest('[data-list]');if(
 // Latency scale follows the bulk of the samples (90th percentile x 1.5, as the classic chart), rounded to a
 // stable step: one slow probe no longer rescales the whole graph and makes every other point look like it jumped.
 function latencyScale(valid){if(!valid.length)return 150;const sorted=[...valid].sort((a,b)=>a-b),top=sorted[sorted.length-1]*1.15;
- const raw=Math.max(150,sorted.length<10?top:Math.min(top,sorted[Math.floor(sorted.length*.9)]*1.5)),step=raw<=300?50:raw<=1000?100:500;return Math.ceil(raw/step)*step;}
+ const raw=Math.max(150,sorted.length<10?top:Math.min(top,sorted[Math.floor(sorted.length*.9)]*1.5)),step=raw<=200?20:raw<=600?40:raw<=2000?200:1000;return Math.ceil(raw/step)*step;} // multiples of 20/40/200: whole numbers on every grid line
 // The chart shifts left by one sample per poll. Morphing old point i into new point i animated every point
 // towards its neighbour's value, so a flat line looked like it was jumping up and down: redraw instead.
 updateWave=function(target,speed){target.innerHTML=chart(speed);};
@@ -161,3 +161,21 @@ function labelControls(root=app){for(const e of root.querySelectorAll('input:not
  if(title)e.setAttribute('aria-label',title);}}
 new MutationObserver(()=>labelControls()).observe(app,{childList:true,subtree:true});labelControls();
 const a11yStyle=document.createElement('style');a11yStyle.textContent='#routex-routing-concept .rx-window textarea:focus-visible,#routex-routing-concept .rx-window summary:focus-visible,#routex-routing-concept .rx-window [tabindex]:focus-visible{outline:2px solid var(--rx-accent);outline-offset:3px}';document.head.append(a11yStyle);
+// Custom application icon in the sidebar / brand (the snapshot carries it as a data URI).
+const absorbBeforeIcon=absorb;absorb=function(snapshot){absorbBeforeIcon(snapshot);state.appIcon=snapshot.artwork?.icon||'';};
+state.appIcon=host.artwork?.icon||'';
+function applyAppIcon(){app.querySelectorAll('.rx-brand img,.r-chrome-brand img').forEach(img=>{const src=state.appIcon||logo;if(img.getAttribute('src')!==src)img.src=src;});}
+const renderBeforeIcon=render;render=function(reset=false){renderBeforeIcon(reset);applyAppIcon();};
+const renderSidebarBeforeIcon=renderSidebar;renderSidebar=function(){renderSidebarBeforeIcon();applyAppIcon();};
+// Accent everywhere: the VPN series (Monitor chart, legend, sidebar dot) follows the chosen accent unless a
+// custom palette sets its own VPN colour, and buttons, switches, fields and cards carry a faint accent tint.
+const applyThemeBeforeAccent=applyTheme;applyTheme=function(){applyThemeBeforeAccent();if(state.theme!=='custom'&&state.accent)app.style.setProperty('--rx-vpn',state.accent);};
+const accentStyle=document.createElement('style');accentStyle.textContent=`
+#routex-routing-concept .rx-window .r-button:not(.primary){background:color-mix(in srgb,var(--rx-accent) 8%,var(--rx-soft));border-color:color-mix(in srgb,var(--rx-accent) 16%,var(--rx-line))}
+#routex-routing-concept .rx-window .r-button:not(.primary):hover{background:color-mix(in srgb,var(--rx-accent) 15%,var(--rx-soft))}
+#routex-routing-concept .rx-window .rx-power{background:color-mix(in srgb,var(--rx-accent) 8%,var(--rx-soft));border-color:color-mix(in srgb,var(--rx-accent) 16%,var(--rx-line))}
+#routex-routing-concept .rx-window .r-combo-trigger,#routex-routing-concept .rx-window input:not([type=checkbox]):not([type=radio]):not([type=range]),#routex-routing-concept .rx-window textarea{border-color:color-mix(in srgb,var(--rx-accent) 14%,var(--rx-line))}
+#routex-routing-concept .rx-window .r-panel{background:color-mix(in srgb,color-mix(in srgb,var(--rx-accent) 4%,var(--rx-panel)) calc(var(--r-card-opacity,.95)*100%),transparent);border-color:color-mix(in srgb,var(--rx-accent) 12%,var(--rx-line))}
+#routex-routing-concept .rx-window .r-iconbutton:hover,#routex-routing-concept .rx-window .r-tab:hover{background:color-mix(in srgb,var(--rx-accent) 10%,transparent)}`;
+document.head.append(accentStyle);
+render();

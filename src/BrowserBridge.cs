@@ -161,12 +161,25 @@ namespace NetProbe
         }
         static string LabelText(Label label){return label==null||label.IsDisposed?"":label.Text;}
         static string BrowserString(Dictionary<string,object> args,string name,string fallback="") { object value;return args.TryGetValue(name,out value)?Convert.ToString(value):fallback; }
+        static readonly string[] DialogActions={"choose-background","app-icon-pick","character-pick","character-inside-pick","import-theme","import-settings","export-settings","import-bat","import-zapret","change-log-folder","save-logs","export-tests","export-sites","check-update","install-core","entry-icon","pick-dpi-folder","export-theme"};
         void BrowserCommand(Dictionary<string,object> message)
         {
             int id=0;try {
                 if(message.ContainsKey("id"))id=Convert.ToInt32(message["id"]);
                 string command=BrowserString(message,"command");
                 var args=message.ContainsKey("args")?message["args"] as Dictionary<string,object>:null;args=args??new Dictionary<string,object>();
+                string action=command=="action"?BrowserString(args,"name"):"";
+                if(Array.IndexOf(DialogActions,action)>=0){
+                    // A file / message dialog must not run inside the WebView2 message handler: it can open
+                    // behind the window or block the browser until closed. Answer now, run it right after.
+                    browser.Reply(id,null);
+                    BeginInvoke((Action)(()=>{
+                        try{DispatchBrowserCommand(command,args);}
+                        catch(Exception ex){Logger.Write(LogLevel.Error,"Interface: "+ex.Message);MessageBox.Show(this,ex.Message,"RouteX",MessageBoxButtons.OK,MessageBoxIcon.Warning);}
+                        if(!IsDisposed&&WebUiShown)browser.UpdateSnapshot(BrowserSnapshot());
+                    }));
+                    return;
+                }
                 object result=DispatchBrowserCommand(command,args);
                 browser.Reply(id,result);if(command!="navigate"&&command!="clipboard"&&command!="interface-ready"&&command!="whats-new-shown")browser.UpdateSnapshot(BrowserSnapshot());
             }catch(Exception ex){browser.Reply(id,null,ex.Message);Logger.Write(LogLevel.Error,"Interface: "+ex.Message);}

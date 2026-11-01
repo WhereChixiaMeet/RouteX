@@ -32,7 +32,25 @@ namespace NetProbe
                         string encoded="data:image/png;base64,"+Convert.ToBase64String(bytes);browserImages[path]=Tuple.Create(modified,encoded);return encoded;
                     }
                 }
-            }catch{return "";}
+            }catch{
+                // GDI+ cannot decode WebP (and some JPEG variants): hand the original file to the browser, which can.
+                try{
+                    string mime;switch(Path.GetExtension(path).ToLowerInvariant()){case ".webp":mime="image/webp";break;case ".jpg":case ".jpeg":mime="image/jpeg";break;case ".png":mime="image/png";break;case ".gif":mime="image/gif";break;case ".bmp":mime="image/bmp";break;default:return "";}
+                    var info=new FileInfo(path);if(info.Length>(background?6*1024*1024:1024*1024))return "";
+                    string raw="data:"+mime+";base64,"+Convert.ToBase64String(File.ReadAllBytes(path));browserImages[path]=Tuple.Create(modified,raw);return raw;
+                }catch{return "";}
+            }
+        }
+        // Sidebar / brand logo of the web interface: the custom application icon, if one is set.
+        string browserIconKey,browserIconData;
+        string BrowserAppIcon()
+        {
+            string path=st.AppIconPath;
+            if(string.IsNullOrWhiteSpace(path)||!File.Exists(path)||appIconBmp==null)return "";
+            string key=path+"|"+File.GetLastWriteTimeUtc(path).Ticks;
+            if(key==browserIconKey)return browserIconData;
+            try{using(var data=new MemoryStream()){appIconBmp.Save(data,ImageFormat.Png);browserIconData="data:image/png;base64,"+Convert.ToBase64String(data.ToArray());browserIconKey=key;return browserIconData;}}
+            catch{return "";}
         }
         object BrowserArtwork()
         {
@@ -41,7 +59,7 @@ namespace NetProbe
 #if UI_PREVIEW
             preview=true;
 #endif
-            return new {background=BrowserImage(st.BgImage,true),slots=CharOverlay.Slots.Select(slot=>new {id=slot,host=SlotOnWidget(slot)?"widget":"window",src=personal?BrowserImage(Path.Combine(folder,slot+".png")):""}).ToArray(),inside=personal?BrowserImage(Path.Combine(folder,"window.png")):"",editor=charEdit,preview};
+            return new {background=BrowserImage(st.BgImage,true),slots=CharOverlay.Slots.Select(slot=>new {id=slot,host=SlotOnWidget(slot)?"widget":"window",src=personal?BrowserImage(Path.Combine(folder,slot+".png")):""}).ToArray(),inside=personal?BrowserImage(Path.Combine(folder,"window.png")):"",editor=charEdit,preview,icon=BrowserAppIcon()};
         }
     }
 }

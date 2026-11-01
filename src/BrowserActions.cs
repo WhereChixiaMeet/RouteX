@@ -150,7 +150,7 @@ namespace NetProbe
                 case "entry-route":ShowRouteFor(BrowserString(args,"value"));return null;
                 case "reset-fonts":{var next=st.Clone();next.FontBtnFamily=next.FontLargeFamily=next.FontMedFamily=next.FontSmallFamily="Segoe UI";next.FontBtnSize=9;next.FontLargeSize=11;next.FontMedSize=9;next.FontSmallSize=8;ApplySettings(next);PushFonts();Theme.MakeFonts();RebuildUi();return null;}
                 case "choose-background":return BrowserPickImage("background");
-                case "remove-background":st.BgImage="";st.Save();ResetPageBackground();RebuildUi();return null;
+                case "remove-background":st.BgImage="";st.Save();ResetPageBackground();return null;
                 case "app-icon-pick":return BrowserPickImage("icon");
                 case "reset-app-icon":st.AppIconPath="";st.Save();ApplyAppIcon();return null;
                 case "character-pick":return BrowserPickImage("character",id);
@@ -170,10 +170,10 @@ namespace NetProbe
         }
         object BrowserPickImage(string target,string slot=null)
         {
-            using(var dialog=new OpenFileDialog{Filter=target=="character"||target=="inside"?"PNG (*.png)|*.png":"Images (*.png;*.jpg;*.jpeg;*.ico)|*.png;*.jpg;*.jpeg;*.ico"}){
+            using(var dialog=new OpenFileDialog{Filter=target=="character"||target=="inside"?"PNG (*.png)|*.png":target=="background"?"Images (*.png;*.jpg;*.jpeg;*.webp;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.webp;*.bmp;*.gif":"Images (*.png;*.jpg;*.jpeg;*.ico)|*.png;*.jpg;*.jpeg;*.ico"}){
                 if(dialog.ShowDialog(this)!=DialogResult.OK)return null;
-                if(target=="background"){st.BgImage=dialog.FileName;st.Save();ResetPageBackground();RebuildUi();}
-                else if(target=="icon"){st.AppIconPath=dialog.FileName;st.Save();ApplyAppIcon();}
+                if(target=="background"){if(BrowserImage(dialog.FileName,true)=="")throw new InvalidOperationException("This image could not be read. Use PNG, JPG or WebP up to 6 MB.");st.BgImage=dialog.FileName;st.Save();ResetPageBackground();}
+                else if(target=="icon"){st.AppIconPath=dialog.FileName;st.Save();ApplyAppIcon();UpdateTray();}
                 else if(target=="inside"){Directory.CreateDirectory(CharOverlay.Folder(Theme.Kind));File.Copy(dialog.FileName,Path.Combine(CharOverlay.Folder(Theme.Kind),"window.png"),true);ResetPageBackground();UpdateChars();}
                 else{int index=int.Parse(slot);if(index<0||index>=CharOverlay.Slots.Length)throw new ArgumentException("Unknown slot");SetCharPicture(CharOverlay.Slots[index],dialog.FileName);}
                 return null;
