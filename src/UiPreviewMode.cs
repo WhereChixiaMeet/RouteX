@@ -68,7 +68,7 @@ namespace NetProbe
                     if(await BrowserInterface.EvaluateAsync("!!document.querySelector('dialog[open]')")=="true"){
                         await BrowserInterface.CaptureAsync(Path.Combine(folder,"whats-new.png"));
                         await BrowserInterface.CaptureElementAsync(Path.Combine(folder,"welcome.png"),"dialog[open]");
-                        if(await BrowserInterface.EvaluateAsync("document.querySelector('dialog h2').textContent==='Welcome to RouteX 4.0'&&!!document.querySelector('.r-release-brand img')")!="true")throw new Exception("Welcome branding is missing");
+                        if(await BrowserInterface.EvaluateAsync("document.querySelector('dialog h2').textContent==='Welcome to RouteX "+Version+"'&&!!document.querySelector('.r-release-brand img')")!="true")throw new Exception("Welcome branding is missing");
                         int navigationCount=BrowserInterface.DocumentNavigations;
                         await BrowserInterface.EvaluateAsync("window.welcomeDocumentMarker='same-document';document.querySelector('dialog [data-dismiss-welcome]').click()");
                         await System.Threading.Tasks.Task.Delay(3000);

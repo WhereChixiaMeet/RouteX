@@ -48,9 +48,24 @@ for name in sorted(package):
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, destination)
 shutil.copy2(root / 'RouteX.exe', out / 'RouteX.exe')
+# Ship the WebView2 assemblies side-by-side with the executable: the app then
+# loads them from disk and never unpacks/loads DLLs in memory at runtime,
+# which behavioral antivirus heuristics flag as dropper-like activity.
+wv = root / 'vendor' / 'webview2' / 'sdk'
+extras = {
+    'Microsoft.Web.WebView2.Core.dll': wv / 'lib' / 'net462' / 'Microsoft.Web.WebView2.Core.dll',
+    'Microsoft.Web.WebView2.WinForms.dll': wv / 'lib' / 'net462' / 'Microsoft.Web.WebView2.WinForms.dll',
+    'webview2/x64/WebView2Loader.dll': wv / 'runtimes' / 'win-x64' / 'native' / 'WebView2Loader.dll',
+    'webview2/x86/WebView2Loader.dll': wv / 'runtimes' / 'win-x86' / 'native' / 'WebView2Loader.dll',
+}
+for name, source in extras.items():
+    assert source.is_file(), f'Missing WebView2 SDK file: {source}'
+    destination = out / name
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, destination)
 zip_path = outputs / 'RouteX-4.0.zip'
 with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as archive:
-    for name in sorted(package | {'RouteX.exe'}):
+    for name in sorted(package | {'RouteX.exe'} | set(extras)):
         archive.write(out / name, name)
 with zipfile.ZipFile(zip_path) as archive:
     names = archive.namelist()

@@ -1,4 +1,7 @@
 // Engine sources and concise connection labels; routing keys stay unchanged.
+// The host already has a native title bar; retain one brand in the sidebar.
+app.querySelector('.rx-chrome')?.remove();
+const nativeChromeStyle=document.createElement('style');nativeChromeStyle.textContent='#routex-routing-concept .rx-window::before{inset:0}';document.head.append(nativeChromeStyle);
 const powerBeforeTunnel=power;
 power=function(name,on){const template=document.createElement('template');template.innerHTML=powerBeforeTunnel(name,on);if(name==='vpn'){const control=template.content.firstElementChild;control.setAttribute('aria-label','Tunnel');control.querySelector('.rx-powertext').innerHTML=`Tunnel <small>${on?'ON':'OFF'}</small>`;}return template.innerHTML;};
 const configsNavigation=nav.find(item=>item&&item[0]==='configs');if(configsNavigation)configsNavigation[2]='Tunnel Configs';

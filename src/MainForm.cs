@@ -16,7 +16,7 @@ namespace NetProbe
 {
     public partial class MainForm : Form
     {
-        public const string Version = "4.0";
+        public const string Version = "4.0.1";
         public static bool HadProfileAtLaunch;
         Settings st;
         readonly ChannelMonitor monVpn = new ChannelMonitor("vpn"), monDir = new ChannelMonitor("direct");
@@ -104,6 +104,7 @@ namespace NetProbe
             monVpn.GetProber = () => pVpn;
             monDir.GetProber = () => pDir;
             monVpn.Sample += OnSampleBg; monDir.Sample += OnSampleBg;
+            monVpn.NeedLatencySamples=()=>uiLive&&!bgProbe;
             // VLESS / VMess / Trojan туннель в состоянии VPN: пока данные идут через сервер, сайт не опрашивается (Clash API sing-box)
             monVpn.Passive = () =>
             {

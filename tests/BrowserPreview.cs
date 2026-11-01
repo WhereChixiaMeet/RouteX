@@ -81,6 +81,8 @@ class BrowserPreview
                 await Task.Delay(500);
                 if(Settings.Load().KillSwitch)throw new Exception("The HTML checkbox did not reach the native settings handler");
                 Console.WriteLine("PASS HTML checkbox saves native Settings");
+                if(await form.BrowserInterface.EvaluateAsync("!document.querySelector('.rx-chrome')&&document.querySelectorAll('.rx-brand').length===1")!="true")throw new Exception("Duplicate inner title bar remains");
+                Console.WriteLine("PASS native title bar and one sidebar brand, without duplicate inner chrome");
                 await form.BrowserInterface.EvaluateAsync("document.querySelector('[data-action=\"add-list:include\"]').click();document.querySelector('dialog textarea').value='preview-ui.exe';document.querySelector('dialog form').requestSubmit()");
                 await Task.Delay(500);
                 if(!AppLists.Get(AppLists.HybridApps).Contains("preview-ui.exe"))throw new Exception("HTML list editor did not update AppLists");
@@ -176,6 +178,17 @@ class BrowserPreview
                 try{for(int kick=0;kick<160;kick++){monitor.Kick();await Task.Delay(20);}}finally{monitor.Stop();}
                 lock(prober.Calls){Console.WriteLine("Probe timestamps: "+string.Join(",",prober.Calls));if(prober.Calls.Count<2)throw new Exception("Monitor did not make enough test requests");for(int i=1;i<prober.Calls.Count;i++)if(prober.Calls[i]-prober.Calls[i-1]<1429)throw new Exception("Kick bypassed the polling cap");}
                 Console.WriteLine("PASS repeated settings wakes cannot bypass the request interval (offline prober)");
+                var foregroundProber=new CountingProber();int visibleLatency=1;
+                var liveMonitor=new ChannelMonitor("vpn"){GetSettings=()=>limits,GetProber=()=>foregroundProber,Passive=()=>TunnelFlowState.Flowing,NeedLatencySamples=()=>System.Threading.Volatile.Read(ref visibleLatency)==1};
+                limits.ProbePassive=true;limits.ProbeIdleSec=30;liveMonitor.Start();
+                try{
+                    await Task.Delay(3100);lock(foregroundProber.Calls){if(foregroundProber.Calls.Count<3)throw new Exception("Passive flow suppressed visible latency samples");}
+                    System.Threading.Volatile.Write(ref visibleLatency,0);await Task.Delay(200);int hiddenCount;lock(foregroundProber.Calls)hiddenCount=foregroundProber.Calls.Count;
+                    await Task.Delay(1700);lock(foregroundProber.Calls){if(foregroundProber.Calls.Count!=hiddenCount)throw new Exception("Background flow still sent active HTTP probes");}
+                    System.Threading.Volatile.Write(ref visibleLatency,1);liveMonitor.Kick();await Task.Delay(1650);
+                    lock(foregroundProber.Calls){if(foregroundProber.Calls.Count<=hiddenCount)throw new Exception("Visible latency did not resume");for(int i=1;i<foregroundProber.Calls.Count;i++)if(foregroundProber.Calls[i]-foregroundProber.Calls[i-1]<1429)throw new Exception("Visible latency bypassed polling cap");}
+                }finally{liveMonitor.Stop();}
+                Console.WriteLine("PASS visible latency keeps its configured cadence, hidden flow uses passive checks, and restoring visibility resumes real samples within the cap");
                 await form.BrowserInterface.EvaluateAsync("document.querySelector('[data-nav=settings]').click();document.querySelector('[data-settings-tab=appearance]').click();window.palettePicker=document.querySelector('[data-palette=bg]');palettePicker.value='#123456';palettePicker.dispatchEvent(new Event('input',{bubbles:true}));palettePicker.dispatchEvent(new Event('change',{bubbles:true}))");await Task.Delay(250);
                 if(!Settings.Load().UiCustomTheme||!Settings.Load().UiPalette.Contains("#123456"))throw new Exception("Custom palette was not saved");
                 if(await form.BrowserInterface.EvaluateAsync("palettePicker===document.querySelector('[data-palette=bg]')")!="true")throw new Exception("Color input was recreated while editing");

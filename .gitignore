@@ -19,3 +19,8 @@ vendor/
 tests/.build-*/
 publish-payloads-*/
 src/WebUi/interface.html
+
+# WebView2 assemblies copied next to the exe by build-web-preview.cmd
+Microsoft.Web.WebView2.Core.dll
+Microsoft.Web.WebView2.WinForms.dll
+webview2/

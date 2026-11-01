@@ -2,7 +2,7 @@
 
 Secure connections and per-app routing for Windows, with automatic failover, DPI tools, subscriptions, and connection monitoring.
 
-**[Download RouteX 4.0](https://github.com/WhereChixiaMeet/RouteX/releases/tag/v4.0)** · [Release notes](RELEASE-4.0.md)
+**[Download RouteX 4.0.1](https://github.com/WhereChixiaMeet/RouteX/releases/tag/v4.0.1)** · [Release notes](RELEASE-4.0.1.md)
 
 ## Interface
 
@@ -40,7 +40,7 @@ Hybrid mode is in **Settings → Engine → Sources**. RU sites direct, IPv4-onl
 
 ## Install or update
 
-Download **RouteX.exe**, or fully extract **RouteX-4.0.zip** before starting it. Keep the existing `config`, core and theme folders when updating. The canonical application executable is RouteX.exe; data folder names and internal network identities remain compatible with earlier releases.
+Download **RouteX.exe**, or fully extract **RouteX-4.0.1.zip** before starting it. Keep the existing `config`, core and theme folders when updating. The canonical application executable is RouteX.exe; data folder names and internal network identities remain compatible with earlier releases.
 
 Requirements: Windows 10/11, .NET Framework 4.8, Microsoft Edge WebView2 Runtime, and administrator access for TUN, WinDivert and firewall operations. Connection and DPI cores can be installed or updated from the app. A separately installed WireSock engine is required for WireGuard configs.
 
