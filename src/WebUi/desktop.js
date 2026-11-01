@@ -179,3 +179,22 @@ const accentStyle=document.createElement('style');accentStyle.textContent=`
 #routex-routing-concept .rx-window .r-iconbutton:hover,#routex-routing-concept .rx-window .r-tab:hover{background:color-mix(in srgb,var(--rx-accent) 10%,transparent)}`;
 document.head.append(accentStyle);
 render();
+// Routing and Subscriptions: the page header, connection card and toolbars stay in place; only the
+// Include / Strict / Exclude lists and the server table scroll (the whole page used to scroll).
+const listScrollStyle=document.createElement('style');listScrollStyle.textContent=`
+#routex-routing-concept .rx-main.rx-fixed-page{display:flex;flex-direction:column;overflow-y:auto}
+#routex-routing-concept .rx-fixed-page>.r-page{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+#routex-routing-concept .rx-fixed-page .r-maincontent{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+#routex-routing-concept .rx-fixed-page .rx-top,#routex-routing-concept .rx-fixed-page .r-maincontent>*{flex:none}
+#routex-routing-concept .rx-fixed-page .rx-rules{flex:1 1 auto;min-height:220px;display:flex;flex-direction:column}
+#routex-routing-concept .rx-fixed-page .rx-columns{flex:1 1 auto;min-height:0;grid-template-rows:minmax(0,1fr)}
+#routex-routing-concept .rx-fixed-page .rx-column{min-height:0;display:flex;flex-direction:column}
+#routex-routing-concept .rx-fixed-page .rx-colhead{flex:none}
+#routex-routing-concept .rx-fixed-page .rx-entries{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+#routex-routing-concept .rx-fixed-page .r-subs-tablewrap{flex:1 1 auto;min-height:200px;overflow:auto;overscroll-behavior:contain}
+#routex-routing-concept .rx-fixed-page .r-subs-table thead th{position:sticky;top:0;z-index:1;background:var(--rx-panel)}`;
+document.head.append(listScrollStyle);
+function markListScrollPage(){const main=app.querySelector('.rx-main');if(main)main.classList.toggle('rx-fixed-page',state.page==='routing'||state.page==='subscriptions');}
+const renderBeforeListScroll=render;render=function(reset=false){renderBeforeListScroll(reset);markListScrollPage();};
+const navigateBeforeListScroll=navigate;navigate=function(page,tab){navigateBeforeListScroll(page,tab);markListScrollPage();};
+markListScrollPage();

@@ -47,6 +47,11 @@ jobs:
         shell: cmd
         run: call src\build.cmd
 
+      - name: Check interface script
+        if: steps.ver.outputs.mode != 'skip'
+        shell: bash
+        run: node -e "const s=require('fs').readFileSync('src/WebUi/interface.html','utf8');for(const m of s.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g))new Function(m[1].replace('ROUTEX_HOST_INITIAL_JSON','{}'));console.log('interface script parses')"
+
       - name: Publish release
         if: steps.ver.outputs.mode != 'skip'
         shell: bash
