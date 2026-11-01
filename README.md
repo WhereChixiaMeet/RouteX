@@ -2,8 +2,6 @@
 
 Secure connections and per-app routing for Windows, with automatic failover, DPI tools, subscriptions, and connection monitoring.
 
-**[Download RouteX 4.0.1](https://github.com/WhereChixiaMeet/RouteX/releases/tag/v4.0.1)** · [Release notes](RELEASE-4.0.1.md)
-
 ## Interface
 
 Screenshots use an isolated demo profile. Connection states and measurements are simulated, names and keys are examples, and displayed IP addresses belong to documentation ranges. Click an image to view it at full size.
