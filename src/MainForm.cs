@@ -16,7 +16,7 @@ namespace NetProbe
 {
     public partial class MainForm : Form
     {
-        public const string Version = "4.0.6";
+        public const string Version = "4.0.7";
         public static bool HadProfileAtLaunch;
         Settings st;
         readonly ChannelMonitor monVpn = new ChannelMonitor("vpn"), monDir = new ChannelMonitor("direct");
@@ -808,10 +808,10 @@ namespace NetProbe
             if (proxy == "" && xm.Active && !router.Active) proxy = "socks5h://127.0.0.1:" + st.SocksPort;
             // IPv4 / IPv6: через socks5h адрес резолвит прокси (и может выбрать любой протокол) — тогда резолвим сами (socks5)
             if (st.ProbeIpFamily != 2 && proxy.StartsWith("socks5h://", StringComparison.OrdinalIgnoreCase)) proxy = "socks5://" + proxy.Substring(10);
-            pVpn = new CurlProber { CurlPath = vpnExe, Proxy = proxy, ViaShell = false, IpFamily = st.ProbeIpFamily };
+            pVpn = new AgentProber { CurlPath = vpnExe, Proxy = proxy, ViaShell = false, IpFamily = st.ProbeIpFamily, AgentName = "netprobe-vpn.exe", UseAgent = () => !router.Active || router.Wg.IsXray || Router.AgentInTunnel() };
             string bind = direct != null ? direct.Ip : null;
             if (st.DirectMode == 1) pDir = new PsProber { PingSource = bind };
-            else pDir = new CurlProber { CurlPath = dirExe, ViaShell = false, BindIp = bind, NoProxy = true, PingSource = bind };
+            else pDir = new AgentProber { CurlPath = dirExe, ViaShell = false, BindIp = bind, NoProxy = true, PingSource = bind, AgentName = "netprobe-direct.exe" };
             if (cardVpn != null) { cardVpn.Sub = pVpn.Describe; cardDir.Sub = pDir.Describe; cardVpn.Invalidate(); cardDir.Invalidate(); UpdateEngineLabel(); }
         }
 
@@ -1414,6 +1414,7 @@ namespace NetProbe
 #endif
             }
             try { TgProxy.Stop(); } catch { }
+            try { ProbeAgentHost.StopAll(); } catch { }
             try { tray.Visible = false; tray.Dispose(); } catch { }
             base.OnFormClosing(e);
         }

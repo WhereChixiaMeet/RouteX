@@ -24,3 +24,6 @@ src/WebUi/interface.html
 Microsoft.Web.WebView2.Core.dll
 Microsoft.Web.WebView2.WinForms.dll
 webview2/
+
+# Probe agent, built and embedded by build-web-preview.cmd
+src/ProbeAgent/probe-agent.exe

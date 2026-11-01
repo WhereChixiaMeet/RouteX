@@ -30,7 +30,7 @@ config\      settings.ini, lists\*.txt, tunnels\*.conf, dpi\*.txt (+ .stock hash
              subscriptions.json, routing.json (rule sets of the Configs rule editor), icons.txt, iconpaths.txt, recent.txt, runtime\ (generated configs, downloads)
 log\         YYYY-MM-DD.log (folder configurable)
 ```
-Exception: curl copies used as probes live in `C:\ProgramData\NetProbe\bin\` (`netprobe-vpn.exe`, `netprobe-direct.exe`) — ASCII path, and that path is referenced by WireSock rules.
+Exception: curl copies used as probes live in `C:\ProgramData\NetProbe\bin\` (`netprobe-vpn.exe`, `netprobe-direct.exe`) — ASCII path, and that path is referenced by WireSock rules. Since 4.0.7 the Monitor polls through long-lived agents `bin\agent\netprobe-vpn.exe` / `netprobe-direct.exe` (`src\ProbeAgent\ProbeAgent.cs`, built and embedded by the build script as `RouteX.ProbeAgent.exe`; host side `ProbeAgentHost.cs` / `AgentProber`, one request per stdin line). `Router.VpnAgent` is added to WireSock `AllowedApps` next to `VpnProbe`; curl stays for tests/downloads and as fallback.
 
 ## Source map (`src\`)
 | File | What |
