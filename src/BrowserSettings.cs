@@ -14,6 +14,7 @@ namespace NetProbe
     {
         static readonly Dictionary<string,string> BrowserFields = new Dictionary<string,string> {
             {"killSwitch","KillSwitch"},
+            {"routingRowSpacing","RoutingRowSpacing"},
             {"backupEnabled","BackupEnabled"},
             {"backupConfig","BackupTunnel"},
             {"config","PrimaryTunnel"},
@@ -208,6 +209,7 @@ namespace NetProbe
                 next.Clamp();st.CopyFrom(next);st.Save();Theme.AccentColor=Theme.ParseColor(st.Accent);Theme.Apply((ThemeKind)st.Theme);
                 UpdateChars();widget?.Invalidate();widget2?.Invalidate();browser.BackColor=Theme.Bg;return null;
             }
+            if(key=="routingRowSpacing"){next.Clamp();st.CopyFrom(next);st.Save();return null;}
             bool fonts=key.StartsWith("font"),appearance=fonts;
             if(key=="hybridMode"&&next.HybridMode&&!st.HybridMode&&!ConfirmHybrid())return null;
             if(key=="server"&&ServerStore.Find(next.ActiveServer)==null)throw new ArgumentException("Unknown server");

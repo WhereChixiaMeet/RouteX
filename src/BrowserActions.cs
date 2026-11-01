@@ -161,7 +161,7 @@ namespace NetProbe
                 case "character-reset":foreach(var slot in CharOverlay.Slots)st.SetCharLayout((Theme.Kurumi?"kurumi.":"chisa.")+slot,null);st.Save();UpdateChars();return null;
                 case "tg-new-secret":st.TgSecret=TgConst.NewSecret();st.Save();TgApplySoon();TgUpdateUi();return null;
                 case "tg-default-dc":st.TgDcIp=TgConst.DefaultDcIp;st.Save();TgApplySoon();return null;
-                case "restart-tg":TgProxy.Stop();TgApply();return null;
+                case "restart-tg":TgRestart();return null;
                 case "copy-tg":if(tgpLink.Text!="")Clipboard.SetText(tgpLink.Text);return null;
                 case "open-tg":TgOpenInTelegram();return null;
                 case "tg-test":BrowserNativeButton(PgTg,id=="dc"?"Проверить":id=="cf"?"Проверить CF-прокси":"Проверить Worker");return null;

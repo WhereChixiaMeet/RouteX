@@ -358,21 +358,24 @@ namespace NetProbe
         public static void Start(TgConfig cfg)
         {
             Stop();
+            TgBalancer.Update(new List<string>());
             if (cfg.CfUserDomains.Count > 0) { TgBalancer.Update(cfg.CfUserDomains); return; }
             TgBalancer.Update(Defaults());
             int my = Interlocked.Increment(ref gen);
-            timer = new Timer(_ => { if (my == gen) Refresh(); }, null, 0, 3600 * 1000);
+            timer = new Timer(_ => { if (my == gen) Refresh(my); }, null, 0, 3600 * 1000);
         }
         public static void Stop() { Interlocked.Increment(ref gen); var t = timer; timer = null; if (t != null) t.Dispose(); }
 
-        static void Refresh()
+        static void Refresh(int generation)
         {
+            if(generation!=Volatile.Read(ref gen))return;
             try
             {
                 string text = TgHttp.GetText(Url + "?" + new string(Enumerable.Range(0, 7).Select(_ => (char)('a' + TgConst.RandInt(26))).ToArray()));
                 var fetched = text.Split('\n').Select(l => l.Trim()).Where(l => l != "" && !l.StartsWith("#")).Select(Decode).ToList();
                 var pool = new List<string>(); var seen = new HashSet<string>();
                 foreach (var d in fetched) { var x = d.Trim().ToLowerInvariant(); if (ValidDomain(x) && seen.Add(x)) pool.Add(x); }
+                if(generation!=Volatile.Read(ref gen))return;
                 if (pool.Count >= 3) { TgBalancer.Update(pool); TgLog.I("CF proxy domain pool updated from GitHub (" + pool.Count + " domains)"); }
                 else TgLog.Wn("Ignoring fetched CF proxy domains (total=" + fetched.Count + ", valid=" + pool.Count + "); keeping current pool");
             }

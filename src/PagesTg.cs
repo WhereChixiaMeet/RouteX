@@ -20,6 +20,7 @@ namespace NetProbe
         Toggle tgpOn;
         System.Windows.Forms.Timer tgpTimer, tgpApply;
         bool tgpLogHooked, tgpLoading;
+        readonly object tgpApplyGate=new object();int tgpApplyGeneration;
         static int TgCardW { get { return Theme.S(420); } } // исходная (минимальная) ширина карточек вкладки
 
         TgConfig TgConfigFromSettings(out string error)
@@ -48,16 +49,19 @@ namespace NetProbe
             return;
 #endif
             if (ShotsDir != null) return; // тестовые скриншоты — прокси не поднимаем
+            int generation=Interlocked.Increment(ref tgpApplyGeneration);
             HookTgLog();
-            if (!st.TgOn) { if (TgProxy.Running) TgProxy.Stop(); TgUpdateUi(); return; }
+            if (!st.TgOn) { lock(tgpApplyGate)TgProxy.Stop(); TgUpdateUi(); return; }
             string err; var c = TgConfigFromSettings(out err);
-            if (c == null) { TgProxy.Stop(); TgProxy.LastError = err; Logger.Write(LogLevel.Error, "[TG] " + err); TgUpdateUi(); return; }
+            if (c == null) { lock(tgpApplyGate){TgProxy.Stop();TgProxy.LastError=err;} Logger.Write(LogLevel.Error, "[TG] " + err); TgUpdateUi(); return; }
             ThreadPool.QueueUserWorkItem(_ =>
             {
-                bool ok = TgProxy.Start(c);
-                try { BeginInvoke((Action)(() => { if (ok) Logger.Write(LogLevel.Ok, Tx("TG Proxy запущен: ") + c.Host + ":" + c.Port); TgUpdateUi(); })); } catch { }
+                bool ok;
+                lock(tgpApplyGate){if(generation!=Volatile.Read(ref tgpApplyGeneration))return;ok=TgProxy.Start(c);}
+                try { BeginInvoke((Action)(() => { if(generation!=Volatile.Read(ref tgpApplyGeneration))return;if (ok) Logger.Write(LogLevel.Ok, Tx("TG Proxy запущен: ") + c.Host + ":" + c.Port); TgUpdateUi(); })); } catch { }
             });
         }
+        void TgRestart(){tgpApply?.Stop();st.TgOn=true;st.Save();TgApply();}
         void TgApplySoon() { if (tgpApply == null) { tgpApply = new System.Windows.Forms.Timer { Interval = 800 }; tgpApply.Tick += (s, e) => { tgpApply.Stop(); TgApply(); }; } tgpApply.Stop(); tgpApply.Start(); }
 
         void HookTgLog()
@@ -196,7 +200,7 @@ namespace NetProbe
             var bCopy = new FlatButton(Tx("Скопировать ссылку")) { Glyph = "" }.AutoW();
             bCopy.Click += (s, e) => { try { Clipboard.SetText(tgpLink.Text); Logger.Write(LogLevel.Info, Tx("Ссылка TG Proxy скопирована")); } catch { } };
             var bRestart = new FlatButton(Tx("Перезапустить")) { Glyph = "" }.AutoW();
-            bRestart.Click += (s, e) => { if (!st.TgOn) { st.TgOn = true; st.Save(); } TgApply(); };
+            bRestart.Click += (s, e) => TgRestart();
             tgpStats = new TgStatsView();
             tgpErr = new Label { AutoSize = false, Font = Theme.Small, ForeColor = Theme.Red, BackColor = Theme.Card, UseMnemonic = false, Visible = false };
             var how = new Label { Text = Tx("Вручную: Telegram → Настройки → Продвинутые → Тип соединения → Прокси → MTProto: адрес, порт и секрет «dd…» из ссылки."), AutoSize = false, Font = Theme.Small, ForeColor = Theme.Muted, BackColor = Theme.Card, UseMnemonic = false };

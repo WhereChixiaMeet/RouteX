@@ -201,6 +201,7 @@ namespace NetProbe
         public string LastRunVersion="",WhatsNewPending="",WhatsNewShownFor="";
         public string UiPalette = "", UiFont = "Segoe UI";
         public double UiZoom = 1;
+        public int RoutingRowSpacing = 8;
         public bool SpeedChartOn { get { return SpeedOn && SpeedChart; } }
         public bool SpeedDefaults = false;
         public bool MonDefaults312 = false;  // 3.1.2: один раз у всех — пинг и скорость включены (дальше можно выключить)
@@ -316,6 +317,7 @@ namespace NetProbe
 
         public void Clamp()
         {
+            RoutingRowSpacing = Math.Max(0, Math.Min(8, RoutingRowSpacing));
             if (TunStack != "mixed" && TunStack != "gvisor") TunStack = "mixed";
             SideWidth = Math.Max(150, Math.Min(380, SideWidth));
             TgPort = Math.Max(1, Math.Min(65535, TgPort)); TgBufKb = Math.Max(4, Math.Min(4096, TgBufKb)); TgPool = Math.Max(0, Math.Min(32, TgPool));

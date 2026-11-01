@@ -18,6 +18,7 @@ namespace NetProbe
         static TgConfig cfg; static byte[] secret;
         static TcpListener listener; static CancellationTokenSource cts;
         static readonly object gate = new object();
+        static readonly object lifecycleGate = new object();
         static readonly HashSet<TgBufStream> clients = new HashSet<TgBufStream>();
         public static readonly TgWsPool WsPool = new TgWsPool();
         public static readonly TgWorkerPool WorkerPool = new TgWorkerPool();
@@ -43,6 +44,11 @@ namespace NetProbe
         }
 
         public static bool Start(TgConfig c)
+        {
+            lock(lifecycleGate)return StartCore(c);
+        }
+
+        static bool StartCore(TgConfig c)
         {
             Stop();
             lock (gate)
@@ -78,14 +84,19 @@ namespace NetProbe
             if (H2Pool != null) TgLog.I("  CF H2 media:   enabled");
             if (c.DisableSecure) TgLog.I("  No secure:     enabled (port 80 for CF proxy/worker)");
             TgLog.I("============================================================");
-            var tok = cts.Token;
-            Task.Run(() => AcceptLoop(tok));
+            var tok = cts.Token;var ownedListener=listener;var runSecret=secret;
+            Task.Run(() => AcceptLoop(ownedListener,c,runSecret,tok));
             WsPool.Warmup(); WorkerPool.Warmup();
             statsTimer = new Timer(_ => { if (Running) TgLog.I("stats: " + TgStats.Summary()); }, null, 60000, 60000);
             return true;
         }
 
         public static void Stop()
+        {
+            lock(lifecycleGate)StopCore();
+        }
+
+        static void StopCore()
         {
             TcpListener l; CancellationTokenSource t; List<TgBufStream> cl;
             lock (gate)
@@ -104,28 +115,32 @@ namespace NetProbe
             TgLog.I("Proxy stopped. Final stats: " + TgStats.Summary());
         }
 
-        static async Task AcceptLoop(CancellationToken tok)
+        static async Task AcceptLoop(TcpListener ownedListener,TgConfig runConfig,byte[] runSecret,CancellationToken tok)
         {
             while (!tok.IsCancellationRequested)
             {
                 TcpClient c;
-                try { c = await listener.AcceptTcpClientAsync().ConfigureAwait(false); }
+                try { c = await ownedListener.AcceptTcpClientAsync().ConfigureAwait(false); }
                 catch (Exception ex)
                 {
                     if (tok.IsCancellationRequested) return;
                     // слушающий сокет «умер» — перезапуск (как listener watchdog)
                     TgLog.Wn("Listening socket died, restarting server: " + TgNetUtil.Err(ex));
-                    try { listener.Stop(); } catch { }
+                    try { ownedListener.Stop(); } catch { }
                     await Task.Delay(1000).ConfigureAwait(false);
-                    try { var l = new TcpListener(IPAddress.Parse(cfg.Host), cfg.Port); l.Start(256); lock (gate) { if (tok.IsCancellationRequested) { l.Stop(); return; } listener = l; } TgLog.Wn("Server restored, listening on " + cfg.Host + ":" + cfg.Port); }
-                    catch (Exception e2) { TgLog.E("Failed to restart server: " + TgNetUtil.Err(e2)); lock (gate) listener = null; return; }
+                    lock(lifecycleGate){
+                        if(tok.IsCancellationRequested)return;
+                        lock(gate){if(!ReferenceEquals(listener,ownedListener))return;}
+                        try{var replacement=new TcpListener(IPAddress.Parse(runConfig.Host),runConfig.Port);replacement.Server.NoDelay=true;replacement.Start(256);lock(gate)listener=replacement;ownedListener=replacement;LastError="";TgLog.Wn("Server restored, listening on "+runConfig.Host+":"+runConfig.Port);}
+                        catch(Exception e2){string error=TgNetUtil.Err(e2);StopCore();LastError=error;TgLog.E("Failed to restart server: "+error);return;}
+                    }
                     continue;
                 }
-                var _ = Task.Run(() => Handle(c, tok));
+                var _ = Task.Run(() => Handle(c,tok,runConfig,runSecret));
             }
         }
 
-        static async Task Handle(TcpClient tcp, CancellationToken tok)
+        static async Task Handle(TcpClient tcp,CancellationToken tok,TgConfig cfg,byte[] secret)
         {
             Interlocked.Increment(ref TgStats.Total); Interlocked.Increment(ref TgStats.Active);
             string label = "?"; try { label = tcp.Client.RemoteEndPoint.ToString(); } catch { }
