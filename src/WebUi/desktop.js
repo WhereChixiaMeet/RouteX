@@ -168,15 +168,12 @@ function applyAppIcon(){app.querySelectorAll('.rx-brand img,.r-chrome-brand img'
 const renderBeforeIcon=render;render=function(reset=false){renderBeforeIcon(reset);applyAppIcon();};
 const renderSidebarBeforeIcon=renderSidebar;renderSidebar=function(){renderSidebarBeforeIcon();applyAppIcon();};
 // Accent everywhere: the VPN series (Monitor chart, legend, sidebar dot) follows the chosen accent unless a
-// custom palette sets its own VPN colour, and buttons, switches, fields and cards carry a faint accent tint.
+// custom palette sets its own VPN colour; input fields carry a faint accent tint (buttons and cards keep the theme colours).
+// The sidebar VPN dot is green: a red accent made it look like an error.
 const applyThemeBeforeAccent=applyTheme;applyTheme=function(){applyThemeBeforeAccent();if(state.theme!=='custom'&&state.accent)app.style.setProperty('--rx-vpn',state.accent);};
 const accentStyle=document.createElement('style');accentStyle.textContent=`
-#routex-routing-concept .rx-window .r-button:not(.primary){background:color-mix(in srgb,var(--rx-accent) 8%,var(--rx-soft));border-color:color-mix(in srgb,var(--rx-accent) 16%,var(--rx-line))}
-#routex-routing-concept .rx-window .r-button:not(.primary):hover{background:color-mix(in srgb,var(--rx-accent) 15%,var(--rx-soft))}
-#routex-routing-concept .rx-window .rx-power{background:color-mix(in srgb,var(--rx-accent) 8%,var(--rx-soft));border-color:color-mix(in srgb,var(--rx-accent) 16%,var(--rx-line))}
-#routex-routing-concept .rx-window .r-combo-trigger,#routex-routing-concept .rx-window input:not([type=checkbox]):not([type=radio]):not([type=range]),#routex-routing-concept .rx-window textarea{border-color:color-mix(in srgb,var(--rx-accent) 14%,var(--rx-line))}
-#routex-routing-concept .rx-window .r-panel{background:color-mix(in srgb,color-mix(in srgb,var(--rx-accent) 4%,var(--rx-panel)) calc(var(--r-card-opacity,.95)*100%),transparent);border-color:color-mix(in srgb,var(--rx-accent) 12%,var(--rx-line))}
-#routex-routing-concept .rx-window .r-iconbutton:hover,#routex-routing-concept .rx-window .r-tab:hover{background:color-mix(in srgb,var(--rx-accent) 10%,transparent)}`;
+#routex-routing-concept .rx-window .r-combo-trigger,#routex-routing-concept .rx-window input:not([type=checkbox]):not([type=radio]):not([type=range]),#routex-routing-concept .rx-window textarea{background:color-mix(in srgb,var(--rx-accent) 6%,var(--rx-field));border-color:color-mix(in srgb,var(--rx-accent) 16%,var(--rx-line))}
+#routex-routing-concept .r-minirow[data-metric="vpn"] .r-marker{background:var(--rx-green)}`;
 document.head.append(accentStyle);
 render();
 // Routing and Subscriptions: the page header, connection card and toolbars stay in place; only the
@@ -190,7 +187,7 @@ const listScrollStyle=document.createElement('style');listScrollStyle.textConten
 #routex-routing-concept .rx-fixed-page .rx-columns{flex:1 1 auto;min-height:0;grid-template-rows:minmax(0,1fr)}
 #routex-routing-concept .rx-fixed-page .rx-column{min-height:0;display:flex;flex-direction:column}
 #routex-routing-concept .rx-fixed-page .rx-colhead{flex:none}
-#routex-routing-concept .rx-fixed-page .rx-entries{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+#routex-routing-concept .rx-fixed-page .rx-entries{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;align-content:start;grid-auto-rows:max-content}
 #routex-routing-concept .rx-fixed-page .r-subs-tablewrap{flex:1 1 auto;min-height:200px;overflow:auto;overscroll-behavior:contain}
 #routex-routing-concept .rx-fixed-page .r-subs-table thead th{position:sticky;top:0;z-index:1;background:var(--rx-panel)}`;
 document.head.append(listScrollStyle);
