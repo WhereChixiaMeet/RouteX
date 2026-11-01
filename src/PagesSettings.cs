@@ -750,10 +750,14 @@ namespace NetProbe
         // После импорта: перечитать всё и пересобрать интерфейс
         void ReloadAll()
         {
+#if UI_PREVIEW
+            PrepareUiPreview();
+#else
             router.Disconnect(); xm.Disconnect();
+#endif
             st.CopyFrom(Settings.Load());
             Theme.AccentColor = Theme.ParseColor(st.Accent); Tr.Set(st.Lang); PushFonts(); Theme.Apply((ThemeKind)st.Theme);
-            AppLists.ZapretLists = Path.Combine(st.ZapretPath, "lists");
+            AppLists.ZapretLists = st.ZapretListsPath;
             Logger.Dir = st.LogPath; Logger.Retention = st.Retention; Logger.ToFile = st.LogToFile;
             ServerStore.Load();
             RebuildUi(); RebuildTrayMenu(); SelectPage(PgSettings);
@@ -767,7 +771,7 @@ namespace NetProbe
             bool themeChanged = n.Theme != st.Theme;
             st.CopyFrom(n); st.Save();
             Logger.ToFile = st.LogToFile; Logger.Dir = st.LogPath; Logger.Retention = st.Retention;
-            AppLists.ZapretLists = Path.Combine(st.ZapretPath, "lists");
+            AppLists.ZapretLists = st.ZapretListsPath;
             chart.Good = st.GoodMs; chart.Warn = st.WarnMs; chart.Invalidate();
             pollSlider.Max = st.MaxPollRate; pollSlider.Value = st.PollRate; st.PollRate = pollSlider.Value;
             var upd = pollSlider.Tag as Action; if (upd != null) upd();
@@ -792,6 +796,9 @@ namespace NetProbe
 
         void SetAutorun(bool on)
         {
+#if UI_PREVIEW
+            return;
+#endif
             if (on && NameMigration.LegacyFallback) { Logger.Write(LogLevel.Warn, "Migration rollback: existing autorun target retained."); return; }
             try
             {

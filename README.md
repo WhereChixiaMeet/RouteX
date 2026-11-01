@@ -1,82 +1,64 @@
 # RouteX
-*(formerly NetProbe)*
 
-**4.0 UI preview (not released):** redesigned pages, fixed layouts, settings backup, persistent palettes, and clearer probe monitoring. The latest published application is still [RouteX 3.6.0](https://github.com/WhereChixiaMeet/RouteX/releases/tag/v3.6.0).
+Secure connections and per-app routing for Windows, with automatic failover, DPI tools, subscriptions, and connection monitoring.
 
-### Interface preview
+**[Download RouteX 4.0](https://github.com/WhereChixiaMeet/RouteX/releases/tag/v4.0)** · [Release notes](RELEASE-4.0.md)
 
-Upcoming 4.0 UI, captured in an isolated demo profile. Connection states and measurements are simulated; names and keys are sample data. Any displayed IP addresses are reserved documentation examples. Click an image for the full-size view.
+## Interface
+
+Screenshots use an isolated demo profile. Connection states and measurements are simulated, names and keys are examples, and displayed IP addresses belong to documentation ranges. Click an image to view it at full size.
 
 | Routing | Subscriptions |
 |:---:|:---:|
-| <a href="docs/images/routex-4.0-routing.png"><img src="docs/images/routex-4.0-routing.png" alt="Routing preview" width="430"></a> | <a href="docs/images/routex-4.0-subscriptions.png"><img src="docs/images/routex-4.0-subscriptions.png" alt="Subscriptions preview" width="430"></a> |
+| <a href="docs/images/routex-4.0-routing.png"><img src="docs/images/routex-4.0-routing.png" alt="Routing" width="430"></a> | <a href="docs/images/routex-4.0-subscriptions.png"><img src="docs/images/routex-4.0-subscriptions.png" alt="Subscriptions" width="430"></a> |
 | **Monitor** | **DPI configs** |
-| <a href="docs/images/routex-4.0-monitor.png"><img src="docs/images/routex-4.0-monitor.png" alt="HTTP latency monitor preview" width="430"></a> | <a href="docs/images/routex-4.0-dpi.png"><img src="docs/images/routex-4.0-dpi.png" alt="DPI strategy editor preview" width="430"></a> |
+| <a href="docs/images/routex-4.0-monitor.png"><img src="docs/images/routex-4.0-monitor.png" alt="HTTP latency and connection monitoring" width="430"></a> | <a href="docs/images/routex-4.0-dpi.png"><img src="docs/images/routex-4.0-dpi.png" alt="DPI strategy editor" width="430"></a> |
 | **App settings** | **Appearance** |
-| <a href="docs/images/routex-4.0-app.png"><img src="docs/images/routex-4.0-app.png" alt="App startup and settings backup preview" width="430"></a> | <a href="docs/images/routex-4.0-appearance.png"><img src="docs/images/routex-4.0-appearance.png" alt="Themes and custom palette preview" width="430"></a> |
+| <a href="docs/images/routex-4.0-app.png"><img src="docs/images/routex-4.0-app.png" alt="App startup, widgets, and settings backup" width="430"></a> | <a href="docs/images/routex-4.0-appearance.png"><img src="docs/images/routex-4.0-appearance.png" alt="Themes and custom palette" width="430"></a> |
+| **Engine** | **What's new** |
+| <a href="docs/images/routex-4.0-engine.png"><img src="docs/images/routex-4.0-engine.png" alt="Connection engines and DPI source folder" width="430"></a> | <a href="docs/images/routex-4.0-welcome.png"><img src="docs/images/routex-4.0-welcome.png" alt="Welcome to RouteX 4.0" width="430"></a> |
 
-3.5.2: the built-in VPN probe is displayed as **RouteX.Checker** with the app icon; its internal process identity remains unchanged. Routing lists show an inline lock explanation and disabled editing controls while the VPN is active. This release publishes only **RouteX.exe**.
+## Features
 
-**Settings → Engine → TUN stack** selects `mixed` or `gvisor` for Configs/subscription TUN. Disconnect before changing and reconnect to apply. Existing installs keep `mixed`.
+- WireGuard through WireSock; VLESS, VMess and Trojan through xray-core and sing-box TUN.
+- Per-app, domain and IP routing with Include, Strict and Exclude lists. Drag entries and use the context menu while disconnected.
+- Primary and backup configs, automatic failover, and RU sites direct routing.
+- Subscriptions with latency and speed checks, favorites, traffic counters, and server autoswitch.
+- DPI strategies and domain lists. Choose a custom DPI source folder; updates are installed there.
+- Telegram proxy, connection tests, HTTP latency monitoring, throughput charts, and desktop widgets.
+- Theme and accent-aware controls, custom palettes, fonts, backgrounds and Character images.
+- Import and export of settings, configs, lists, subscriptions and Character images. Older settings backups remain supported; older backups cannot restore images they never included.
 
-3.5.1 automatically migrates the main executable to **RouteX.exe** in the existing installation directory. The transition release includes an identical NetProbe.exe bridge for older updaters; both enter the same migration. Data folders and internal network identities remain unchanged. The old launcher is backed up and removed after startup and Windows integration succeed; failed integration retains it. See [migration notes](RELEASE-3.5.1.md).
+## Connection sources
 
-Version 3.4.10: update checks fall back to github.com pages when the GitHub API answers 403 (shared VPN IP rate limit). See [release notes](docs/releases/v3.4.10.md).
+- A config is available and no subscription server is available: use Primary config.
+- A subscription server is available and no config is available: use subscriptions.
+- Both sources are available, with Hybrid mode enabled: manual connection asks which source to use.
+- Both sources are available, with Hybrid mode disabled: use Primary config; subscription connections are blocked. The explanation is shown once per installation and is retained across updates.
 
-### MANUAL RESTART REQUIRED AFTER UPDATE ###
+Hybrid mode is in **Settings → Engine → Sources**. RU sites direct, IPv4-only TUN, DNS controls and the TUN stack are also in Engine. Stack choices are `mixed` and `gvisor`; existing installations keep `mixed`. Disconnect before editing TUN settings and reconnect to apply them.
 
-Windows protocol router: WireGuard · VLESS · VMess · Trojan, DPI bypass, MTProxy (TG) per-app split routing with automatic failover and a built-in network monitor.
+## Install or update
 
-## Requirements
-- Windows 10/11 and .NET Framework 4.8. The upcoming 4.0 UI also requires Microsoft Edge WebView2 Runtime.
-- Runs as administrator (WinDivert, TUN and the firewall kill switch need it).
-- WireGuard tunnels use the WireSock VPN Client 1.4.x engine. VLESS / VMess / Trojan tunnels and subscriptions use xray-core + sing-box (TUN), both installable from inside the app.
+Download **RouteX.exe**, or fully extract **RouteX-4.0.zip** before starting it. Keep the existing `config`, core and theme folders when updating. The canonical application executable is RouteX.exe; data folder names and internal network identities remain compatible with earlier releases.
 
-## Folder layout
+Requirements: Windows 10/11, .NET Framework 4.8, Microsoft Edge WebView2 Runtime, and administrator access for TUN, WinDivert and firewall operations. Connection and DPI cores can be installed or updated from the app. A separately installed WireSock engine is required for WireGuard configs.
+
 ```
-RouteX.exe       (main application)
-zapret\          winws.exe, WinDivert, lists (copied from zapret-discord-youtube)
-xray\, singbox\  cores, installed/updated from the app
-config\          settings.ini, tunnels\*.conf|*.json, dpi\*.txt, lists\*.txt, themes\, runtime\
-log\             one file per day: YYYY-MM-DD.log (folder can be changed in Settings)
-src\             sources, build.cmd
+RouteX.exe       main application
+zapret\          default DPI source; a custom folder can be selected
+xray\, singbox\  connection cores
+config\          settings, tunnels, lists, strategies, themes and runtime data
+log\             application logs
+src\             source code and build scripts
 ```
 
-## Routing modes (segment ROUTE | VPN | DPI)
-- **ROUTE** (DPI/VPN) — Include apps go through the tunnel, DPI handles everything outside it at the same time. If the tunnel probe gets no answer for N seconds: primary → backup → DPI failover; back to the tunnel once it is stable again.
-- **VPN** — tunnel only (primary → backup). On outage the kill switch blocks Strict VPN apps.
-- **DPI** — winws only, no tunnel.
+## Monitoring
 
-Clicking the active chip disconnects; clicking another chip switches mode and connects.
-
-## Protocols
-The protocol is a property of each tunnel config (Configs tab): **WireGuard** (via WireSock), **VLESS**, **VMess**, **Trojan** (via xray + sing-box TUN). Every protocol works the same way on top: same router states, lists, kill switch, DPI failover and recovery. Links (`vless://`, `vmess://`, `trojan://`) fill the fields automatically.
-
-## Sources
-- At least one tunnel → Primary VPN is the source, subscriptions are off.
-- No tunnels → subscriptions (xray) are the source.
-- **Hybrid mode** (Settings) → both, with a manual "Primary VPN ⇄ Subscriptions" switch. Primary VPN always has priority.
-
-## Lists (Routing tab — apps only)
-- **Include** — apps in the tunnel (empty = all traffic).
-- **Strict VPN** — always in the tunnel, never DPI; blocked by the kill switch when the tunnel is down.
-- **Exclude** — bypass the tunnel.
-Disconnect the VPN before adding, deleting, pasting, renaming or moving entries in TUN routing lists. Changes take effect on the next connection.
-DPI is global: domains for DPI and "don't touch these sites" live on Configs → DPI → Sites. Priority: Strict VPN > domain > app.
+The latency chart measures HTTP request-to-first-byte time after connection setup; it is not ICMP ping. A failed probe is distinguished from a confirmed connection loss. Polling is capped at 0.7 requests per second per channel; alternates are tried on later scheduled probes instead of retry bursts.
 
 ## Build
-```
-src\build.cmd
-```
-Uses Roslyn from the installed .NET SDK, targets .NET Framework 4.8.
 
-## Languages
-English · Español · 中文 (Settings → Language, applied without restart).
+Run `src\build.cmd` with a .NET SDK installed. The build targets .NET Framework 4.8, restores a pinned Microsoft WebView2 SDK from NuGet with SHA-256 verification, and embeds its managed UI libraries and native loaders. The Microsoft Edge WebView2 Runtime must be installed separately. Third-party license notices are in [docs/licenses](docs/licenses).
 
-## Known limits
-- winws cannot filter by process; legacy process exclusions from 2.x work through current TCP connections (QUIC/UDP not covered).
-- WireSock cannot run twice: stop `wiresock-client-service` (TunnlTo) first — RouteX offers to do it.
-
-## Known Issues
-- the application breaks the routing configuration during an update (SAME ROUTE issue)
-- minor UI issues using custom themes
+Older release and executable migration notes remain available in the repository history and release pages.

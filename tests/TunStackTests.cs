@@ -20,6 +20,7 @@ class TunStackTests
     }
     static int Main()
     {
+        EmbeddedBrowser.Initialize();
         try
         {
             Logger.ToFile = false;

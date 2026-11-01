@@ -12,3 +12,10 @@ history.csv
 # System / editor junk
 Thumbs.db
 .DS_Store
+
+# Local UI builds and downloaded SDK cache
+RouteX.WebPreview.exe
+vendor/
+tests/.build-*/
+publish-payloads-*/
+src/WebUi/interface.html

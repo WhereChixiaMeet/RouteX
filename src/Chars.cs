@@ -37,6 +37,9 @@ namespace NetProbe
 
         void UpdateChars()
         {
+#if UI_PREVIEW
+            return;
+#endif
             if (IsDisposed || ShotsDir != null) return;
             if (CharOverlay.GetLayout == null)
             {
@@ -125,8 +128,15 @@ namespace NetProbe
         Action charEditChanged;
         void SetCharEdit(bool on)
         {
+#if UI_PREVIEW
+            charEdit=on;charEditChanged?.Invoke();return;
+#endif
             if (charEdit == on) return;
-            if (on && st.UiLocked) { Notice.Show(this, Tx("Интерфейс заблокирован"), Tx("Сними «Lock interface» в Настройках → Оформление, чтобы двигать персонажей.")); return; }
+            bool layoutLocked = st.UiLocked;
+#if WEB_UI
+            if (browser != null) layoutLocked = false;
+#endif
+            if (on && layoutLocked) { Notice.Show(this, Tx("Интерфейс заблокирован"), Tx("Сними «Lock interface» в Настройках → Оформление, чтобы двигать персонажей.")); return; }
             charEdit = on;
             if (on && st.CharWidget && widget != null && !widget.IsDisposed && !widget.Visible) { widget.EnsureOnScreen(st.WidgetX, st.WidgetY); widget.Show(); }
             if (!on) ApplyWidgetVisibility();

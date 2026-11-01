@@ -20,9 +20,46 @@ namespace NetProbe
             try { MessageBox.Show(Tx("RouteX не смог запуститься:\r\n\r\n") + text + (file != "" ? Tx("\r\n\r\nСохранено в ") + file : ""), "RouteX", MessageBoxButtons.OK, MessageBoxIcon.Error); } catch { }
         }
 
+#if UI_PREVIEW
+        static void RunUiPreview(string[] args)
+        {
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+            Application.ThreadException+=(sender,eventArgs)=>{
+                try{System.IO.File.AppendAllText(System.IO.Path.Combine(Settings.Sub("runtime"),"interface-error.txt"),DateTime.Now+"\r\n"+eventArgs.Exception+"\r\n\r\n");Logger.Write(LogLevel.Error,"Interface exception: "+eventArgs.Exception);}catch{}
+                using(var dialog=new ThreadExceptionDialog(eventArgs.Exception))if(dialog.ShowDialog()==DialogResult.Abort)Application.Exit();
+            };
+            Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
+            try { Native.SetProcessDPIAware();using(var g=Graphics.FromHwnd(IntPtr.Zero))Theme.Scale=g.DpiX/96f; } catch { }
+            string root=Settings.Root;
+            WM_SHOWME=Native.RegisterWindowMessage("RouteX_UI_Preview_Show_"+NameMigration.AutorunTaskName(root));WM_QUITME=Native.RegisterWindowMessage("RouteX_UI_Preview_Quit_"+NameMigration.AutorunTaskName(root));
+            if(!System.IO.File.Exists(System.IO.Path.Combine(root,"UI-PREVIEW.txt"))){MessageBox.Show("Extract the UI preview ZIP into its own folder, then run RouteX.exe there.","RouteX UI preview");return;}
+            if(System.IO.File.Exists(System.IO.Path.Combine(Settings.Dir,"settings.ini"))&&!Settings.Load().UiPreviewProfile){MessageBox.Show("This folder contains an existing RouteX configuration. Use a separate empty folder for the UI preview. Your configuration was not changed.","RouteX UI preview");return;}
+            bool created;
+            using(var mutex=new Mutex(true,"RouteX_UI_Preview_"+NameMigration.AutorunTaskName(root),out created)){
+                if(!created){MessageBox.Show("The UI preview is already open.","RouteX UI preview");return;}
+                MainForm.PrepareUiPreview();
+                bool backgroundSmoke=Array.IndexOf(args,"--ui-preview-background-smoke")>=0;
+                var preview=new MainForm(backgroundSmoke);
+                if(backgroundSmoke)preview.StartUiPreviewBackgroundSmoke();
+                if(Array.IndexOf(args,"--ui-preview-smoke")>=0)preview.StartUiPreviewSmoke();
+                if(Array.IndexOf(args,"--ui-preview-reveal-smoke")>=0)preview.StartUiPreviewRevealSmoke();
+                Application.Run(preview);
+            }
+        }
+#endif
         [STAThread]
         static void Main(string[] args)
         {
+#if WEB_UI
+            UiStartupTiming.Mark("process entry");
+#endif
+            EmbeddedBrowser.Initialize();
+            MainForm.HadProfileAtLaunch=System.IO.File.Exists(System.IO.Path.Combine(Settings.Dir,"settings.ini"));
+#if UI_PREVIEW
+            try { RunUiPreview(args); }
+            catch(Exception ex){System.IO.File.WriteAllText(System.IO.Path.Combine(Settings.Root,"preview-error.txt"),ex.ToString());Environment.ExitCode=1;}
+            return;
+#endif
             try { if (NameMigration.HandleHelper(args)) return; }
             catch (Exception ex) { Crash(ex); return; }
             try { NameMigration.ResolveInstallation(args); }

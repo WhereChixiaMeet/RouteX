@@ -44,6 +44,9 @@ namespace NetProbe
         // запуск / остановка / перезапуск по текущим настройкам
         void TgApply()
         {
+#if UI_PREVIEW
+            return;
+#endif
             if (ShotsDir != null) return; // тестовые скриншоты — прокси не поднимаем
             HookTgLog();
             if (!st.TgOn) { if (TgProxy.Running) TgProxy.Stop(); TgUpdateUi(); return; }

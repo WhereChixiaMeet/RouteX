@@ -16,7 +16,8 @@ namespace NetProbe
 {
     public partial class MainForm : Form
     {
-        public const string Version = "3.6.0";
+        public const string Version = "4.0";
+        public static bool HadProfileAtLaunch;
         Settings st;
         readonly ChannelMonitor monVpn = new ChannelMonitor("vpn"), monDir = new ChannelMonitor("direct");
         volatile Prober pVpn, pDir;
@@ -50,10 +51,14 @@ namespace NetProbe
 
         public MainForm(bool startMinimized)
         {
+#if WEB_UI
+            UiStartupTiming.Mark("form construction");
+#endif
             st = Settings.Load();
+            ReleaseReview.Prepare(st,Version,HadProfileAtLaunch,Updated);st.Save();
             Theme.AccentColor = Theme.ParseColor(st.Accent);
             Tr.Set(st.Lang);
-            AppLists.ZapretLists = Path.Combine(st.ZapretPath, "lists");
+            AppLists.ZapretLists = st.ZapretListsPath;
             PushFonts();
             Theme.Apply((ThemeKind)st.Theme);
             startHidden = startMinimized || st.StartMinimized;
@@ -87,6 +92,9 @@ namespace NetProbe
 
             InitXray();
             BuildUi();
+#if WEB_UI
+            UiStartupTiming.Mark("native controls ready");
+#endif
             BuildTray();
             HookChars();
             if (ShotsDir == null) { Toast.Init(appIconBmp); Toast.Activated += OnToast; }
@@ -100,11 +108,11 @@ namespace NetProbe
             monVpn.Passive = () =>
             {
                 var rs = router.State;
-                if (uiLive || (rs != RouteState.Vpn && rs != RouteState.Backup) || !router.Wg.IsXray || !router.Wg.Running || router.StrictOnly || router.LastVpnOk == DateTime.MinValue)
+                if ((rs != RouteState.Vpn && rs != RouteState.Backup) || !router.Wg.IsXray || !router.Wg.Running || router.StrictOnly || router.LastVpnOk == DateTime.MinValue)
                 { TunnelFlow.Reset(); return TunnelFlowState.Unavailable; }
                 return TunnelFlow.Read(st.TunnelSocksPort + 1);
             };
-            monVpn.Rotate = monDir.Rotate = () => !uiLive;
+            monVpn.Rotate = monDir.Rotate = () => false; // A stable endpoint keeps successive latency samples comparable; failed endpoints still use configured alternates.
             monVpn.PassiveSample += (m, fs) => router.VpnPassive(fs == TunnelFlowState.Flowing, DateTime.Now);
             // вторая проверка перед аварийным переключением: другие адреса через тот же пробник VPN (через туннель)
             router.ConfirmVpn = () =>
@@ -123,6 +131,9 @@ namespace NetProbe
             };
 
             RefreshAdapters(true);
+#if WEB_UI
+            UiStartupTiming.Mark("adapters ready");
+#endif
             refreshTimer.Tick += (s, e) => RefreshAdapters(false);
             refreshTimer.Start();
             uiTimer.Tick += (s, e) => OnUiTick();
@@ -152,11 +163,30 @@ namespace NetProbe
 
         protected override void SetVisibleCore(bool value)
         {
-            if (startHidden && !IsHandleCreated) { CreateHandle(); value = false; startHidden = false; BeginInvoke((Action)(() => { Startup(); HideToTray(true); })); }
+            if (startHidden && value) { startHidden = false;if(!IsHandleCreated)CreateHandle();value = false;
+#if WEB_UI
+                BeginInvoke((Action)StartHiddenBrowser);
+#else
+                BeginInvoke((Action)(() => { Startup(); HideToTray(true); }));
+#endif
+            }
             base.SetVisibleCore(value);
         }
 
+#if WEB_UI
+        protected override async void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+            try {
+                await EnableBrowserInterfaceAsync();
+#if !UI_PREVIEW
+                Startup();
+#endif
+            } catch (Exception ex) { MessageBox.Show(this,"Could not initialize the interface. Microsoft Edge WebView2 Runtime is required.\r\n\r\n"+ex.Message,"RouteX",MessageBoxButtons.OK,MessageBoxIcon.Error);Close(); }
+        }
+#else
         protected override void OnLoad(EventArgs e) { base.OnLoad(e); Startup(); }
+#endif
 
         // Отладка: --shots <папка> — снимки всех страниц во всех темах, затем выход
         public static string ShotsDir;
@@ -449,7 +479,11 @@ namespace NetProbe
             BackColor = Theme.Bg; ForeColor = Theme.Text; Font = Theme.Body;
             navs.Clear(); pages.Clear(); modules.Clear(); moduleKeys.Clear(); moduleHome.Clear(); moduleTab.Clear();
             docks.Clear(); dockSplits.Clear(); pageOuter.Clear(); frames.Clear(); srvModBody = null; tgBody = null; relayTg = null; innerFrame.Clear();
+#if WEB_UI
+            st.UiLocked=true;CardPanel.Locked=true;
+#else
             CardPanel.Locked = st.UiLocked;
+#endif
             BuildShell();
             BuildConnectPage();
             BuildServersPage();
@@ -526,9 +560,17 @@ namespace NetProbe
             if (runner != null) runner.Cf.Cancelled = true;
             SuspendLayout();
             var old = Controls.Cast<Control>().ToList();
+#if WEB_UI
+            old.Remove(browser);
+            foreach(var c in old)Controls.Remove(c);
+#else
             Controls.Clear();
+#endif
             foreach (var c in old) c.Dispose();
             BuildUi();
+#if WEB_UI
+            if (browser != null) { if(browser.Parent!=this)Controls.Add(browser); browser.BringToFront(); side.Visible = content.Visible = false; }
+#endif
             chart.A.AddRange(a); chart.B.AddRange(b); chart.TA.AddRange(ta); chart.TB.AddRange(tb); chart.Invalidate();
             RedrawLog();
             Native.TitleTheme(Handle, Theme.IsDark); DwmTheme.Apply(Handle);
@@ -918,12 +960,14 @@ namespace NetProbe
             cs.FailRun = r.Ok ? 0 : cs.FailRun + 1;
             if (cs.FailRun == 1) cs.FirstFail = r.Time;
             bool isDown = !r.Ok && cs.FailRun >= downAfter, blip = !r.Ok && !isDown;
-            Level lv = r.Ok ? LatLevel(r.Latency) : isDown ? Level.Down : Level.Slow;
+            bool connectionDown=isVpn&&(router.State==RouteState.VpnDown||xm.State==XState.AllDown);
+            Level lv = r.Ok ? LatLevel(r.Latency) : connectionDown ? Level.Down : Level.Slow;
+            string endpoint="";Uri probeUri;if(Uri.TryCreate(r.TargetUrl,UriKind.Absolute,out probeUri))endpoint=" ["+probeUri.Host+"]";
             if (r.Ok && s.Count >= 10 && s.LossPct >= 5 && lv < Level.Slow) lv = Level.Slow;
             if (blip)
             {
-                Logger.Write(LogLevel.Warn, name + Tx(": опрос не прошёл (") + cs.FailRun + "/" + downAfter + ") — " + r.Error);
-                card.Level = lv; card.Line1 = "✗  " + r.Error; card.Pulse();
+                Logger.Write(LogLevel.Warn, name + ": probe request failed (" + cs.FailRun + "/" + downAfter + ")"+endpoint+" — " + r.Error);
+                card.Level = lv; card.Badge="PROBE RETRY";card.Line1 = "Probe request failed"+endpoint+": " + r.Error;card.Line2="A failed probe does not confirm a connection loss.";card.Pulse();
                 chart.Add(isVpn, LatencyChart.Blip);
                 if (st.LogPolls) Logger.Write(LogLevel.Poll, name + ": " + Tx("СБОЙ · ") + r.Error);
                 cs.Lv = lv;
@@ -933,18 +977,18 @@ namespace NetProbe
             }
 
             if (cs.Ok == null)
-                Logger.Write(r.Ok ? LogLevel.Ok : LogLevel.Error, name + ": " + (r.Ok ? Tx("есть связь · ") + F0(r.Latency) + Tx(" мс") + (r.Ip != "" ? " · IP " + r.Ip + " " + r.Loc : "") : Tx("нет связи — ") + r.Error));
+                Logger.Write(r.Ok ? LogLevel.Ok : LogLevel.Warn, name + ": " + (r.Ok ? Tx("есть связь · ") + F0(r.Latency) + Tx(" мс") + (r.Ip != "" ? " · IP " + r.Ip + " " + r.Loc : "") : "probe unavailable"+endpoint+" — " + r.Error));
             else if (cs.Ok == true && !r.Ok)
             {
                 cs.DownSince = cs.FirstFail; // обрыв считается с первого неудачного опроса
-                Logger.Write(LogLevel.Error, name + Tx(": связь потеряна — ") + r.Error);
-                Notify(cs, name + Tx(": связь потеряна"), r.Error, ToolTipIcon.Error);
+                Logger.Write(LogLevel.Warn, name + ": probe unavailable"+endpoint+" — " + r.Error);
+                Notify(cs, name + ": probe unavailable", "Probe requests failed. Connection status is checked separately.", ToolTipIcon.Warning);
             }
             else if (cs.Ok == false && r.Ok)
             {
                 var down = DateTime.Now - cs.DownSince;
-                Logger.Write(LogLevel.Ok, name + Tx(": связь восстановлена через ") + (int)down.TotalSeconds + Tx(" с · ") + F0(r.Latency) + Tx(" мс"));
-                Notify(cs, name + Tx(": связь восстановлена"), Tx("Задержка ") + F0(r.Latency) + Tx(" мс"), ToolTipIcon.Info);
+                Logger.Write(LogLevel.Ok, name + ": probe responding again after " + (int)down.TotalSeconds + " s · " + F0(r.Latency) + " ms"+endpoint);
+                Notify(cs, name + ": probe responding again", F0(r.Latency) + " ms", ToolTipIcon.Info);
             }
             if (r.Ok && r.Ip != "" && cs.Ip != "" && r.Ip != cs.Ip)
             {
@@ -977,7 +1021,8 @@ namespace NetProbe
                 if (same) Logger.Write(LogLevel.Warn, Tx("VPN и «Напрямую» выходят с одного IP ") + cs.Ip + Tx(" — оба идут одним маршрутом."));
                 else if (r.Ok && other.Ok == true) Logger.Write(LogLevel.Ok, Tx("Каналы разделены: VPN ") + chs["vpn"].Ip + Tx(" / напрямую ") + chs["direct"].Ip);
             }
-            cardVpn.Badge = cardDir.Badge = sameRoute ? Tx("ОДИН МАРШРУТ") : null;
+            if(sameRoute)cardVpn.Badge=cardDir.Badge=Tx("ОДИН МАРШРУТ");
+            else{card.Badge=r.Ok?null:connectionDown?"VPN UNAVAILABLE":"PROBE UNAVAILABLE";var otherCard=isVpn?cardDir:cardVpn;if(otherCard.Badge==Tx("ОДИН МАРШРУТ"))otherCard.Badge=null;}
             if (st.LogPolls)
                 Logger.Write(LogLevel.Poll, name + ": " + (r.Ok ? "HTTP " + r.Code + " · RTT " + F0(r.Latency) + Tx(" мс · DNS ") + F0(r.Dns) + " · TCP " + F0(r.Connect) + " · TLS " + F0(r.Tls) + Tx(" · всего ") + F0(r.Total) + Tx(" мс") : Tx("СБОЙ · ") + r.Error));
 
@@ -989,12 +1034,12 @@ namespace NetProbe
             card.Line1 = r.Ok ? "IP " + ipS + (locS != "" ? "  ·  " + locS : "") + (coloS != "" ? Tx("  ·  узел ") + coloS : "") + "  ·  HTTP " + r.Code : "✗  " + r.Error;
             card.Line2 = r.Ok ? "DNS " + F0(r.Dns) + "  ·  TCP " + F0(r.Connect) + "  ·  TLS " + F0(r.Tls) + Tx("  ·  всего ") + F0(r.Total) + Tx(" мс")
                               : Tx("Повтор через ") + F1(m.EffectiveIntervalMs / 1000) + Tx(" с (после ") + m.ConsecutiveFails + Tx(" ошибок)");
-            card.Line3 = Tx("ср ") + F0(s.Avg) + Tx("  ·  мин ") + F0(s.Min) + Tx("  ·  макс ") + F0(s.Max) + Tx("  ·  джиттер ") + F1(s.Jitter) + Tx("  ·  потери ") + F1(s.LossPct) + Tx("%  ·  аптайм ") + F1(s.Uptime) + Tx("%  ·  обрывы ") + s.Drops;
+            card.Line3 = Tx("ср ") + F0(s.Avg) + Tx("  ·  мин ") + F0(s.Min) + Tx("  ·  макс ") + F0(s.Max) + Tx("  ·  джиттер ") + F1(s.Jitter) + "  ·  failed probes " + F1(s.LossPct) + "%  ·  probe uptime " + F1(s.Uptime) + "%  ·  probe gaps " + s.Drops;
             card.Pulse();
-            if (isDown && cs.FailRun == downAfter) chart.ConfirmLast(isVpn, downAfter - 1);
-            chart.Add(isVpn, r.Ok ? r.Latency : double.NaN);
+            if (connectionDown && cs.FailRun == downAfter) chart.ConfirmLast(isVpn, downAfter - 1);
+            chart.Add(isVpn, r.Ok ? r.Latency : connectionDown?double.NaN:LatencyChart.Blip);
 
-            cs.Lv = lv; cs.Val = r.Ok ? F0(r.Latency) + Tx(" мс") : Tx("нет связи");
+            cs.Lv = lv; cs.Val = r.Ok ? F0(r.Latency) + Tx(" мс") : "probe failed";
             widget.SetRow(isVpn ? 0 : 1, lv, cs.Val, r.Ok ? r.Latency : double.NaN);
             if (miniMon != null && !miniMon.IsDisposed) miniMon.SetRow(isVpn ? 0 : 1, lv, r.Ok ? F0(r.Latency) + Tx(" мс") : "✗", r.Ok ? r.Latency : double.NaN);
             UpdateTray();
@@ -1265,6 +1310,9 @@ namespace NetProbe
 
         void ApplyWidgetVisibility()
         {
+#if UI_PREVIEW
+            widget?.Hide();widget2?.Hide();return;
+#endif
             // мониторинг выключен — строк пинга нет; нечего показывать (ни пинга, ни скорости) — виджета нет совсем
             bool ping = st.WidgetPing && MonOn, speed = st.WidgetSpeedOn;
             bool split = st.WidgetSplit && ping && speed;
@@ -1326,6 +1374,9 @@ namespace NetProbe
             Show();
             if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
             Activate(); Native.SetForegroundWindow(Handle);
+#if WEB_UI
+            ActivateBrowserInterface();
+#endif
             ApplyWidgetVisibility();
             PageFrame pf; if (frames.TryGetValue(curPage, out pf)) LayFrame(pf); // из трея — колонка модулей по настоящему размеру окна
         }
@@ -1334,24 +1385,30 @@ namespace NetProbe
         {
             base.OnResize(e);
             if (WindowState != lastWinState) { lastWinState = WindowState; if (WindowState != FormWindowState.Minimized && IsHandleCreated) BeginInvoke((Action)(() => { SaveWindowBounds(); PageFrame pf; if (frames.TryGetValue(curPage, out pf)) LayFrame(pf); })); }
+#if !UI_PREVIEW
             if (WindowState == FormWindowState.Minimized && st != null && st.MinimizeToTray && !hiddenToTray && Visible && !rebuilding)
                 BeginInvoke((Action)(() => HideToTray(false)));
+#endif
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
+#if !UI_PREVIEW
             if (!exiting && e.CloseReason == CloseReason.UserClosing && st.CloseToTray)
             {
                 e.Cancel = true; HideToTray(false); return;
             }
+#endif
             exiting = true;
             SaveWindowBounds();
             monVpn.Stop(); monDir.Stop();
             if (runner != null) runner.Cf.Cancelled = true;
             if (!exitForUpdate) // при самообновлении VPN/DPI/xray продолжают работать, новая версия их подхватит
             {
+#if !UI_PREVIEW
                 try { router.ShutdownSync(); } catch { }
                 try { xm.ShutdownSync(); } catch { }
+#endif
             }
             try { TgProxy.Stop(); } catch { }
             try { tray.Visible = false; tray.Dispose(); } catch { }

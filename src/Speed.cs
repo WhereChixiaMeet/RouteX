@@ -25,6 +25,9 @@ namespace NetProbe
 
         public static void Start()
         {
+#if UI_PREVIEW
+            return;
+#endif
             if (timer != null) return;
             lastRx = lastTx = -1;
             timer = new System.Threading.Timer(_ => Tick(), null, 1000, 1000);

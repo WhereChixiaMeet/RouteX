@@ -8,6 +8,16 @@ using static NetProbe.Tr;
 namespace NetProbe
 {
     public enum Source { None, Vpn, Subs }
+    public static class ConnectionSources
+    {
+        public static Source Resolve(bool hybrid,int configs,int servers,int selected)
+        {
+            if(configs<=0)return servers>0?Source.Subs:Source.None;
+            if(servers<=0||!hybrid)return Source.Vpn;
+            return selected==1?Source.Subs:Source.Vpn;
+        }
+        public static bool NeedsChoice(bool hybrid,int configs,int servers){return hybrid&&configs>0&&servers>0;}
+    }
 
     // 3.0: логика источников (ТЗ, раздел 4) и единый сегмент ROUTE | VPN | DPI.
     //  • туннелей ≥ 1 и гибрид выключен → работает только Primary VPN, подписки заблокированы;
@@ -21,15 +31,14 @@ namespace NetProbe
 
         Source ActiveSource()
         {
-            int n = TunnelCount; bool subs = HasSubs;
-            if (st.HybridMode)
-            {
-                if (st.Source == 1 && subs) return Source.Subs;
-                if (n > 0) return Source.Vpn;
-                return subs ? Source.Subs : Source.None;
-            }
-            if (n > 0) return Source.Vpn;
-            return subs ? Source.Subs : Source.None;
+            return ConnectionSources.Resolve(st.HybridMode,TunnelCount,HasSubs?1:0,st.Source);
+        }
+
+        void NotifySubscriptionPriority()
+        {
+            if(st.HybridMode||TunnelCount==0||!HasSubs||st.SubscriptionPriorityNotified)return;
+            st.SubscriptionPriorityNotified=true;st.Save();
+            Notice.Show(this,"Connection source","Subscriptions are unavailable while Hybrid mode is off and a config exists. Primary config will be used. Enable Hybrid mode in Engine settings to choose between sources.");
         }
 
         // почему подписки сейчас нельзя подключать (null — можно)
@@ -126,9 +135,13 @@ namespace NetProbe
             t.Route.Location = new System.Drawing.Point(t.Dpi.Left - Theme.S(8) - t.Route.Width, y);
         }
 
-        void VpnButtonClick(string preferServer)
+        void VpnButtonClick(string preferServer,bool sourceChosen=false)
         {
             if (AnyActive || pendingXConnect != null) { DisconnectAll(); UpdateModeUi(); return; }
+            if(!sourceChosen&&st.RunMode!=RouteMode.DpiOnly&&ConnectionSources.NeedsChoice(st.HybridMode,TunnelCount,HasSubs?1:0)){
+                bool ignored;int choice=Notice.Show(this,"Connection source","Choose the source for this connection.",new[]{"Primary config","Subscriptions","Cancel"},null,out ignored);
+                if(choice<0||choice>1)return;st.Source=choice;st.Save();
+            }
             // на вкладке Subscriptions выбранный в таблице сервер — если подписки сейчас активный источник
             if (preferServer != null && st.RunMode != RouteMode.DpiOnly && ActiveSource() == Source.Subs && ServerStore.Find(preferServer) != null)
             { st.ActiveServer = preferServer; st.Save(); }
@@ -170,6 +183,7 @@ namespace NetProbe
                 return;
             }
             var src = ActiveSource();
+            if(fromUser)NotifySubscriptionPriority();
             if (src == Source.None)
             {
                 if (fromUser) Notice.Show(this, Tx("Нет источника"), Tx("Нет ни туннелей, ни подписок — RouteX работает как чистый DPI-модуль. Добавь туннель в «Конфиги» или подписку на вкладке Subscriptions."));
@@ -189,11 +203,6 @@ namespace NetProbe
                 return;
             }
             // источник — подписки
-            if (fromUser && TunnelCount == 0 && !st.VpnNoTunnelWarned)
-            {
-                st.VpnNoTunnelWarned = true; st.Save(); // один раз за жизнь установки; обновлением не сбрасывается
-                Notice.Show(this, Tx("Туннель не назначен"), Tx("Туннель не назначен — VPN будет работать через используемую подписку."));
-            }
             if (router.Active) router.Disconnect();
             var pick = ServerStore.Find(st.ActiveServer);
             if (pick == null)

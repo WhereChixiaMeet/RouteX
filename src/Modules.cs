@@ -47,8 +47,14 @@ namespace NetProbe
         // свои вкладки: c1 → «Название», по порядку создания; страница — сразу после «Настроек»
         List<KeyValuePair<string, string>> CustomPages()
         {
+#if WEB_UI
+            return new List<KeyValuePair<string,string>>();
+#else
+
             return (st.CustomPages ?? "").Split(';').Select(p => { int i = p.IndexOf(':'); return i > 0 ? new KeyValuePair<string, string>(p.Substring(0, i), p.Substring(i + 1)) : new KeyValuePair<string, string>("", ""); })
                 .Where(p => p.Key != "").ToList();
+        
+#endif
         }
         int PageCount { get { return PgFirstCustom + CustomPages().Count; } }
         string LocOfPage(int idx) { return idx >= PgFirstCustom ? CustomPages()[idx - PgFirstCustom].Key : "p" + idx; }
@@ -62,16 +68,28 @@ namespace NetProbe
         }
         int PageOf(string key)
         {
+#if WEB_UI
+            int fixedHome;return moduleHome.TryGetValue(key,out fixedHome)?fixedHome:PgSettings;
+#else
+
             string v; int home; moduleHome.TryGetValue(key, out home);
             if (!Map(st.ModuleLoc, '=').TryGetValue(key, out v)) return home;
             int p = PageOfLoc(v);
             return p < 0 ? home : p;
+        
+#endif
         }
         string ModTab(string key)
         {
+#if WEB_UI
+            string fixedTab;return moduleTab.TryGetValue(key,out fixedTab)?fixedTab:"subs";
+#else
+
             string t;
             if (Map(st.ModuleTabs, '=').TryGetValue(key, out t) && SetTabsDef.Any(d => d[0] == t)) return t; // положили в другую вкладку Настроек
             return moduleTab.TryGetValue(key, out t) ? t : "subs";
+        
+#endif
         }
         bool ModInSettings(string key) { return PageOf(key) == PgSettings; }
 
@@ -83,8 +101,10 @@ namespace NetProbe
             c.RememberBase();
             c.ModuleKey = key; modules[key] = c; moduleHome[key] = home; moduleTab[key] = tab;
             if (!moduleKeys.Contains(key)) moduleKeys.Add(key);
+#if !WEB_UI
             c.ModuleMenu += ShowModuleMenu;
             Ui.Tip().SetToolTip(c, Tx("Тащи за заголовок: на пункт меню слева — на ту страницу, в колонке — поменять порядок. ПКМ по заголовку — меню."));
+#endif
         }
 
         // ---- Lock interface ----
@@ -99,14 +119,24 @@ namespace NetProbe
         }
         void SetUiLocked(bool on)
         {
+#if WEB_UI
+            st.UiLocked=true;CardPanel.Locked=true;return;
+#else
+
             st.UiLocked = on; st.Save(); CardPanel.Locked = on;
             Logger.Write(LogLevel.Info, on ? Tx("Интерфейс заблокирован") : Tx("Интерфейс разблокирован"));
             if (cLock != null && !cLock.IsDisposed && cLock.Checked != on) cLock.Checked = on;
             foreach (var sp in dockSplits.Values) if (!sp.IsDisposed) sp.Cursor = on ? Cursors.Default : Cursors.SizeWE;
+        
+#endif
         }
 
         void ShowModuleMenu(CardPanel c)
         {
+#if WEB_UI
+            return;
+#else
+
             if (LockedMenu()) return;
             var cm = new ContextMenuStrip { Renderer = new ThemedMenuRenderer(), Font = Theme.Body };
             int cur = PageOf(c.ModuleKey), home; moduleHome.TryGetValue(c.ModuleKey, out home);
@@ -125,11 +155,17 @@ namespace NetProbe
             cm.Items.Add(Tx("Все карточки — на свои места"), null, (s, e) => ResetLayout());
             cm.Closed += (s, e) => BeginInvoke((Action)(() => cm.Dispose()));
             cm.Show(Cursor.Position);
+        
+#endif
         }
 
         void MoveModule(string key, int page, bool open) { MoveModuleLoc(key, LocOfPage(page), open); }
         void MoveModuleLoc(string key, string loc, bool open)
         {
+#if WEB_UI
+            return;
+#else
+
             int page = PageOfLoc(loc); if (page < 0) return;
             if (PageOf(key) == page) return;
             var m = Map(st.ModuleLoc, '=');
@@ -142,6 +178,8 @@ namespace NetProbe
             st.Save();
             Logger.Write(LogLevel.Info, Tx("Карточка «") + (modules.ContainsKey(key) ? modules[key].Title : key) + Tx("» → ") + PageName(page));
             ApplyModules(open ? page : curPage);
+        
+#endif
         }
 
         void ResetLayout()
@@ -167,6 +205,10 @@ namespace NetProbe
         readonly List<KeyValuePair<NavButton, int>> navTargets = new List<KeyValuePair<NavButton, int>>();
         void HookModuleDrop(NavButton nb, int page)
         {
+#if WEB_UI
+            return;
+#else
+
             navTargets.RemoveAll(x => x.Key.IsDisposed);
             navTargets.Add(new KeyValuePair<NavButton, int>(nb, page));
             if (!dragHooked)
@@ -174,6 +216,8 @@ namespace NetProbe
                 dragHooked = true;
                 CardPanel.DragStarted += OnCardDragStart; CardPanel.DragMoved += OnCardDragMove; CardPanel.DragEnded += OnCardDragEnd;
             }
+        
+#endif
         }
 
         sealed class DropAt { public int Page = -1; public NavButton Nav; public Control Box; public string Before; public bool NoOp; }
@@ -485,7 +529,11 @@ namespace NetProbe
         void PlaceAllModules()
         {
             // порядок карточек — как их расставил пользователь (перетаскиванием внутри страницы)
+            #if WEB_UI
+            var ord = new List<string>();
+#else
             var ord = (st.ModuleOrder ?? "").Split(',').Where(x => x != "").ToList();
+#endif
             if (ord.Count > 0)
             {
                 var orig = moduleKeys.ToList();
@@ -517,6 +565,10 @@ namespace NetProbe
         // ---- меню слева: переименование, свои вкладки ----
         void NavMenu(int idx)
         {
+#if WEB_UI
+            return;
+#else
+
             if (LockedMenu()) return;
             var cm = new ContextMenuStrip { Renderer = new ThemedMenuRenderer(), Font = Theme.Body };
             var cp = CustomPages();
@@ -544,6 +596,8 @@ namespace NetProbe
             cm.Items.Add(Tx("Сбросить раскладку интерфейса"), null, (s, e) => ResetLayout());
             cm.Closed += (s, e) => BeginInvoke((Action)(() => cm.Dispose()));
             cm.Show(Cursor.Position);
+        
+#endif
         }
         void SaveCustomPages(List<KeyValuePair<string, string>> l) { st.CustomPages = string.Join(";", l.Select(p => p.Key + ":" + p.Value.Replace(";", ",").Replace(":", " "))); }
 
@@ -561,6 +615,10 @@ namespace NetProbe
         // свои вкладки: карточки колонками по ширине окна, пусто — подсказка
         void BuildCustomPages()
         {
+#if WEB_UI
+            return;
+#else
+
             customHosts.Clear(); customLays.Clear();
             foreach (var cpg in CustomPages())
             {
@@ -588,6 +646,8 @@ namespace NetProbe
                 customLays[id] = lay;
                 p.Resize += (s, e) => lay();
             }
+        
+#endif
         }
     }
 }

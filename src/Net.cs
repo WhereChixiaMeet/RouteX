@@ -95,6 +95,7 @@ namespace NetProbe
         public double SpeedDown, SpeedUp, SizeDown, SizeUp;
         public string RemoteIp = "", Ip = "", Loc = "", Colo = "", Error = "", Body = "";
         public DateTime Time = DateTime.Now;
+        public string TargetUrl="";
         public double Latency { get { return Lat >= 0 ? Lat : Total; } }
     }
 
@@ -154,6 +155,9 @@ namespace NetProbe
         {
             get
             {
+#if UI_PREVIEW
+                string preview=Path.Combine(Settings.Sub("runtime"),"probes");Directory.CreateDirectory(preview);return preview;
+#else
                 foreach (var d in new[] { Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "NetProbe"), Path.GetTempPath() })
                 {
                     try
@@ -166,6 +170,7 @@ namespace NetProbe
                     catch { }
                 }
                 return Path.GetTempPath();
+#endif
             }
         }
 

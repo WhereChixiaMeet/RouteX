@@ -73,7 +73,10 @@ namespace NetProbe
         // опросы по кругу только когда это разрешено (окно и виджеты скрыты): на виду — один сайт, ровный график
         public Func<bool> Rotate;
         public event Action<ChannelMonitor, TunnelFlowState> PassiveSample; // данные через сервер идут / тишина — опрос сайта пропущен
-        DateTime lastActive = DateTime.MinValue; int urlIndex;
+        DateTime lastActive = DateTime.MinValue;
+        readonly System.Diagnostics.Stopwatch requestClock=System.Diagnostics.Stopwatch.StartNew();
+        long lastRequestAt=-1;
+        readonly ProbeEndpointSelector endpoints=new ProbeEndpointSelector();
 
         Thread th; volatile bool running; readonly AutoResetEvent wake = new AutoResetEvent(false);
         public bool Running { get { return running; } }
@@ -112,13 +115,19 @@ namespace NetProbe
                         continue;
                     }
                 }
+                // Settings changes can wake the loop; waking must not bypass the
+                // request interval. Use monotonic time, independent of clock changes.
+                if(lastRequestAt>=0){double remaining=interval-(requestClock.Elapsed.TotalMilliseconds-lastRequestAt);if(remaining>0){wake.WaitOne((int)Math.Ceiling(remaining));continue;}}
+                lastRequestAt=requestClock.ElapsedMilliseconds;
                 var urls = st.ProbeUrls();
                 bool rotate = Rotate == null || Rotate();
-                string url = rotate ? urls[(urlIndex++ & int.MaxValue) % urls.Count] : st.ProbeUrl;
+                string url = endpoints.Pick(urls,rotate,requestClock.Elapsed.TotalSeconds);
                 lastActive = t0;
                 ProbeResult r;
                 try { r = GetProber().Http(url, st.TimeoutSec); }
                 catch (Exception ex) { r = new ProbeResult { Error = ex.Message }; }
+                if(r==null)r=new ProbeResult{Error="Probe returned no result"};
+                r.TargetUrl=url;endpoints.Report(url,r.Ok,requestClock.Elapsed.TotalSeconds);
                 if (!running) break;
                 if (Paused) continue; // результат во время теста скорости не учитываем
                 Stats.Add(r);

@@ -25,7 +25,9 @@ namespace NetProbe
         {
             ServerStore.Load();
             AppLists.SeedServers();
+#if !UI_PREVIEW
             SysProxy.ClearIfStale(st.HttpPort, st.XrayPath);
+#endif
             xm.GetSettings = () => st;
             xm.GetCurl = () => curlPath;
             XState lastX = XState.Off;

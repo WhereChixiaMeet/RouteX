@@ -188,6 +188,7 @@ namespace NetProbe
         // winws должен быть остановлен вызывающим.
         public static string UpdateZapret(Settings st, Action<string> status)
         {
+            st=st.Clone();string destination=st.ZapretPath;
             status(Tx("Проверка версии zapret…"));
             var rel = Latest(ZapretRepo, n => n.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
             if (rel.AssetUrl == "") return Tx("В релизе нет архива");
@@ -198,7 +199,7 @@ namespace NetProbe
             // архив может содержать вложенную папку
             if (!Directory.Exists(Path.Combine(root, "bin"))) { var d = Directory.GetDirectories(ex).FirstOrDefault(x => Directory.Exists(Path.Combine(x, "bin"))); if (d != null) root = d; }
             if (!Directory.Exists(Path.Combine(root, "bin"))) return Tx("Неожиданная структура архива");
-            string z = st.ZapretPath;
+            string z = destination;
             Directory.CreateDirectory(z);
             CopyDir(Path.Combine(root, "bin"), Path.Combine(z, "bin"), null);
             CopyDir(Path.Combine(root, "lists"), Path.Combine(z, "lists"), n => !n.EndsWith("-user.txt", StringComparison.OrdinalIgnoreCase));

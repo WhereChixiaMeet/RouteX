@@ -27,9 +27,38 @@ namespace NetProbe
                 { "tunnels", Files(Settings.Sub("tunnels"), "*.conf").Concat(Files(Settings.Sub("tunnels"), "*.json")).ToDictionary(kv => kv.Key, kv => kv.Value) }, // WireGuard + VLESS/VMess/Trojan
                 { "dpi", Files(Settings.Sub("dpi"), "*.txt") },
                 { "servers", File.Exists(Path.Combine(Settings.Dir, "servers.json")) ? File.ReadAllText(Path.Combine(Settings.Dir, "servers.json"), Encoding.UTF8) : "" },
-                { "subscriptions", File.Exists(Path.Combine(Settings.Dir, "subscriptions.json")) ? File.ReadAllText(Path.Combine(Settings.Dir, "subscriptions.json"), Encoding.UTF8) : "" }
+                { "subscriptions", File.Exists(Path.Combine(Settings.Dir, "subscriptions.json")) ? File.ReadAllText(Path.Combine(Settings.Dir, "subscriptions.json"), Encoding.UTF8) : "" },
+                { "characters", CharacterFiles() }
             };
             return new JavaScriptSerializer { MaxJsonLength = int.MaxValue }.Serialize(root);
+        }
+
+        // Optional extension: legacy readers ignore it, legacy backups need not contain it.
+        static readonly string[] CharacterThemes = { "chisa", "kurumi" };
+        static readonly string[] CharacterNames = { "frame.png", "widget.png", "pic3.png", "pic4.png", "window.png" };
+        static Dictionary<string, object> CharacterFiles()
+        {
+            var files = new Dictionary<string, object>();
+            foreach (string theme in CharacterThemes)
+                foreach (string name in CharacterNames) {
+                    string path = Path.Combine(Settings.Dir, "themes", theme, name);
+                    if (File.Exists(path)) files[theme + "/" + name] = Convert.ToBase64String(File.ReadAllBytes(path));
+                }
+            return files;
+        }
+
+        static Dictionary<string, byte[]> ReadCharacters(object value)
+        {
+            var files = value as Dictionary<string, object>;
+            if (files == null) throw new FormatException("Invalid character backup.");
+            var decoded = new Dictionary<string, byte[]>();
+            foreach (var file in files) {
+                string[] parts = file.Key.Split('/');
+                if (parts.Length != 2 || !CharacterThemes.Contains(parts[0]) || !CharacterNames.Contains(parts[1]))
+                    throw new FormatException("Invalid character file name.");
+                decoded[file.Key] = Convert.FromBase64String(Convert.ToString(file.Value));
+            }
+            return decoded;
         }
 
         static void WriteFiles(object o, string dir)
@@ -50,6 +79,9 @@ namespace NetProbe
             try { root = new JavaScriptSerializer { MaxJsonLength = int.MaxValue }.Deserialize<Dictionary<string, object>>(json); }
             catch (Exception ex) { return ex.Message; }
             if (root == null || !root.ContainsKey("app") || Convert.ToString(root["app"]) != "NetProbe") return Tr.Tx("Это не файл настроек RouteX");
+            Dictionary<string, byte[]> characters = null;
+            try { if (root.ContainsKey("characters")) characters = ReadCharacters(root["characters"]); }
+            catch (Exception ex) { return ex.Message; }
             Func<string, string> s = k => root.ContainsKey(k) ? Convert.ToString(root[k]) : "";
             if (s("settings") != "") File.WriteAllText(Path.Combine(Settings.Dir, "settings.ini"), s("settings"), new UTF8Encoding(false));
             if (root.ContainsKey("lists")) WriteFiles(root["lists"], Settings.Sub("lists"));
@@ -57,6 +89,11 @@ namespace NetProbe
             if (root.ContainsKey("dpi")) WriteFiles(root["dpi"], Settings.Sub("dpi"));
             if (s("servers") != "") File.WriteAllText(Path.Combine(Settings.Dir, "servers.json"), s("servers"), new UTF8Encoding(false));
             if (s("subscriptions") != "") File.WriteAllText(Path.Combine(Settings.Dir, "subscriptions.json"), s("subscriptions"), new UTF8Encoding(false));
+            if (characters != null) foreach (var file in characters) {
+                string path = Path.Combine(Settings.Dir, "themes", file.Key.Replace('/', Path.DirectorySeparatorChar));
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                File.WriteAllBytes(path, file.Value);
+            }
             return null;
         }
     }

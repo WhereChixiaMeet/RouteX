@@ -42,9 +42,9 @@ namespace NetProbe
 
         // Безопасные пределы частоты опроса (запросов в секунду на один канал)
         public const double MinPollRate = 0.1;
-        public const double MaxPollRateCurl = 2.0;
-        public const double MaxPollRatePs = 1.0;
-        public const int MinIntervalMs = 500;
+        public const double MaxPollRateCurl = 0.7;
+        public const double MaxPollRatePs = 0.7;
+        public const int MinIntervalMs = 1429;
         public const int MaxBackoffMs = 15000;
         public static string[] RetentionNames { get { return new[] { Tx("1 час"), Tx("1 день"), Tx("1 неделя"), Tx("1 месяц") }; } }
 
@@ -196,6 +196,11 @@ namespace NetProbe
         public bool SideSpeedOn { get { return SpeedOn && SideSpeed; } }
         public bool SideVpn = true, SideDirect = true, SideDownload = true, SideUpload = true;
         public bool ConnectOptionsOpen = false, SubsOptionsOpen = false, SubsCompact = true;
+        public bool UiCustomTheme = false;
+        public bool UiPreviewProfile = false;
+        public string LastRunVersion="",WhatsNewPending="",WhatsNewShownFor="";
+        public string UiPalette = "", UiFont = "Segoe UI";
+        public double UiZoom = 1;
         public bool SpeedChartOn { get { return SpeedOn && SpeedChart; } }
         public bool SpeedDefaults = false;
         public bool MonDefaults312 = false;  // 3.1.2: один раз у всех — пинг и скорость включены (дальше можно выключить)
@@ -234,6 +239,7 @@ namespace NetProbe
         public bool V3Migrated = false;      // одноразовая миграция настроек 2.x → 3.0 (Mode = режим работы, а не «вид»)
         public bool HybridMode = false;      // Режим гибрида: Primary VPN и подписки разрешены одновременно, ручной тумблер источника
         public bool HybridWarned = false;    // предупреждение о гибриде показано (галочка «больше не показывать»)
+        public bool SubscriptionPriorityNotified = false; // Installation lifetime; never reset by version updates.
         public int Source = 0;               // активный источник в гибриде: 0 Primary VPN, 1 Subscriptions
         public bool VpnNoTunnelWarned = false; // «Туннель не назначен» показан — один раз за жизнь установки, обновлением не сбрасывается
         public bool DomainsMigrated = false; // домены из карточек приложений перенесены в общий список DPI
@@ -288,7 +294,15 @@ namespace NetProbe
 
         public string SingBoxPath { get { return string.IsNullOrWhiteSpace(SingBoxDir) ? Path.Combine(Root, "singbox") : SingBoxDir.Trim(); } }
         public string XrayPath { get { return string.IsNullOrWhiteSpace(XrayDir) ? Path.Combine(Root, "xray") : XrayDir.Trim(); } }
-        public string ZapretPath { get { return string.IsNullOrWhiteSpace(ZapretDir) ? Path.Combine(Root, "zapret") : ZapretDir.Trim(); } }
+        public static string ResolveDpiSourceFolder(string folder){string value=string.IsNullOrWhiteSpace(folder)?"zapret":Environment.ExpandEnvironmentVariables(folder.Trim());return Path.GetFullPath(Path.IsPathRooted(value)?value:Path.Combine(Root,value));}
+        public string ZapretPath { get { return ResolveDpiSourceFolder(ZapretDir); } }
+        public string ZapretListsPath { get {
+#if UI_PREVIEW
+            return Path.Combine(Root,"zapret-preview","lists");
+#else
+            return Path.Combine(ZapretPath,"lists");
+#endif
+        } }
 
         public TimeSpan Retention
         {

@@ -276,6 +276,7 @@ namespace NetProbe
             try { File.WriteAllLines(IconsFile, c.Select(kv => kv.Key + "|" + kv.Value).ToArray()); } catch { }
             lock (cache) { cache.Remove(entry); missAt.Remove(entry); }
         }
+        public static void RenameCustom(string oldEntry,string newEntry){string path;if(Custom().TryGetValue(oldEntry,out path)){SetCustom(newEntry,path);SetCustom(oldEntry,null);}}
         static Bitmap LoadIcon(string path)
         {
             string ext = System.IO.Path.GetExtension(path).ToLowerInvariant();
