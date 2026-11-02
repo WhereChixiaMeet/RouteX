@@ -159,7 +159,7 @@ namespace NetProbe
                 {
                     case "ws": { var w = D(ss, "wsSettings"); e.Path = S(w, "path"); e.Host = S(w, "host") != "" ? S(w, "host") : S(D(w, "headers"), "Host"); break; }
                     case "grpc": { var g = D(ss, "grpcSettings"); e.ServiceName = S(g, "serviceName"); e.Mode = B(g, "multiMode") ? "multi" : ""; break; }
-                    case "xhttp": { var x = D(ss, "xhttpSettings") ?? D(ss, "splithttpSettings"); e.Path = S(x, "path"); e.Host = S(x, "host"); e.Mode = S(x, "mode"); break; }
+                    case "xhttp": { var x = D(ss, "xhttpSettings") ?? D(ss, "splithttpSettings"); e.Path = S(x, "path"); e.Host = S(x, "host"); e.Mode = S(x, "mode"); var xe = D(x, "extra"); if (xe != null && xe.Count > 0) e.Extra = new JavaScriptSerializer().Serialize(xe); break; }
                     case "httpupgrade": { var x = D(ss, "httpupgradeSettings"); e.Path = S(x, "path"); e.Host = S(x, "host"); break; }
                     case "http": case "h2": { var x = D(ss, "httpSettings"); e.Path = S(x, "path"); e.Host = Join(Get(x, "host")); e.Network = "h2"; break; }
                     case "kcp": { e.HeaderType = S(D(D(ss, "kcpSettings"), "header"), "type"); break; }
@@ -301,7 +301,7 @@ namespace NetProbe
             Action<string, string> add = (k, v) => { if (!string.IsNullOrEmpty(v)) q.Add(k + "=" + U(v)); };
             if (e.Protocol == "vless") add("encryption", e.Method == "" ? "none" : e.Method);
             add("flow", e.Flow); add("security", e.Security == "" ? "none" : e.Security); add("sni", e.Sni); add("fp", e.Fp); add("pbk", e.Pbk); add("sid", e.Sid); add("spx", e.Spx);
-            add("type", e.Network == "" ? "tcp" : e.Network); add("path", e.Path); add("host", e.Host); add("serviceName", e.ServiceName); add("mode", e.Mode); add("headerType", e.HeaderType); add("alpn", e.Alpn);
+            add("type", e.Network == "" ? "tcp" : e.Network); add("path", e.Path); add("host", e.Host); add("serviceName", e.ServiceName); add("mode", e.Mode); add("headerType", e.HeaderType); add("alpn", e.Alpn); if (e.Network == "xhttp") add("extra", e.Extra);
             if (e.Insecure) q.Add("allowInsecure=1");
             return e.Protocol + "://" + U(e.UserId) + "@" + host + ":" + e.Port + "?" + string.Join("&", q) + "#" + U(e.Name);
         }

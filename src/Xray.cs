@@ -16,6 +16,7 @@ namespace NetProbe
     {
         public string Id = "", Group = "", Name = "", Protocol = "", Address = "", UserId = "", Method = "", Flow = "", Network = "tcp", Security = "none";
         public string Sni = "", Fp = "", Pbk = "", Sid = "", Spx = "", Path = "", Host = "", Alpn = "", ServiceName = "", Mode = "", HeaderType = "", Link = "";
+        public string Extra = "";         // xhttp: JSON из параметра extra (xmux, xPaddingBytes, downloadSettings …) — как в v2rayN
         public int Port, AlterId;
         public bool Favorite, Insecure;
         public int Delay = -1;            // мс; -1 = не проверялся, -2 = недоступен
@@ -121,7 +122,7 @@ namespace NetProbe
                         e.Flow = Q(q, "flow"); e.Network = Q(q, "type") == "" ? "tcp" : Q(q, "type");
                         e.Security = Q(q, "security") == "" ? (proto == "trojan" ? "tls" : "none") : Q(q, "security");
                         e.Sni = Q(q, "sni") != "" ? Q(q, "sni") : Q(q, "peer"); e.Fp = Q(q, "fp"); e.Pbk = Q(q, "pbk"); e.Sid = Q(q, "sid"); e.Spx = Q(q, "spx");
-                        e.Path = Q(q, "path"); e.Host = Q(q, "host"); e.Alpn = Q(q, "alpn"); e.ServiceName = Q(q, "serviceName"); e.Mode = Q(q, "mode"); e.HeaderType = Q(q, "headerType");
+                        e.Path = Q(q, "path"); e.Host = Q(q, "host"); e.Alpn = Q(q, "alpn"); e.ServiceName = Q(q, "serviceName"); e.Mode = Q(q, "mode"); e.HeaderType = Q(q, "headerType"); e.Extra = Q(q, "extra");
                         e.Insecure = Q(q, "allowInsecure") == "1" || Q(q, "insecure") == "1";
                     }
                     else return null;
@@ -196,7 +197,15 @@ namespace NetProbe
                 case "ws": s["wsSettings"] = new Dictionary<string, object> { { "path", Path == "" ? "/" : Path }, { "headers", new Dictionary<string, object> { { "Host", Host } } } }; break;
                 case "grpc": s["grpcSettings"] = new Dictionary<string, object> { { "serviceName", ServiceName != "" ? ServiceName : Path }, { "multiMode", Mode == "multi" } }; break;
                 case "http": s["httpSettings"] = new Dictionary<string, object> { { "path", Path == "" ? "/" : Path }, { "host", hosts } }; break;
-                case "xhttp": case "splithttp": s["network"] = "xhttp"; s["xhttpSettings"] = new Dictionary<string, object> { { "path", Path == "" ? "/" : Path }, { "host", Host }, { "mode", Mode == "" ? "auto" : Mode } }; break;
+                case "xhttp": case "splithttp":
+                    {
+                        s["network"] = "xhttp";
+                        var xh = new Dictionary<string, object> { { "path", Path == "" ? "/" : Path }, { "host", Host }, { "mode", Mode == "" ? "auto" : Mode } };
+                        // extra из ссылки панели (xmux и пр.): без него xray берёт свои умолчания, и настройки сервера теряются
+                        if (Extra != "") try { var ex = new JavaScriptSerializer().DeserializeObject(Extra) as Dictionary<string, object>; if (ex != null && ex.Count > 0) xh["extra"] = ex; } catch { }
+                        s["xhttpSettings"] = xh;
+                        break;
+                    }
                 case "httpupgrade": s["httpupgradeSettings"] = new Dictionary<string, object> { { "path", Path == "" ? "/" : Path }, { "host", Host } }; break;
                 case "kcp": s["kcpSettings"] = new Dictionary<string, object> { { "header", new Dictionary<string, object> { { "type", HeaderType == "" ? "none" : HeaderType } } } }; break;
                 case "tcp":
