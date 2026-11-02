@@ -169,6 +169,7 @@ namespace NetProbe
                 string command=BrowserString(message,"command");
                 var args=message.ContainsKey("args")?message["args"] as Dictionary<string,object>:null;args=args??new Dictionary<string,object>();
                 string action=command=="action"?BrowserString(args,"name"):"";
+                if(command=="appPicker"){BrowserAppPicker(id,args);return;}
                 if(Array.IndexOf(DialogActions,action)>=0){
                     // A file / message dialog must not run inside the WebView2 message handler: it can open
                     // behind the window or block the browser until closed. Answer now, run it right after.

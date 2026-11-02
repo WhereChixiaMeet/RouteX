@@ -48,7 +48,7 @@ window.chrome.webview.addEventListener('message',event=>{const data=event.data;i
 function saveDesktopSetting(key,value){return hostCall('setting',{name:key,value});}
 const v5Perform=perform;
 perform=function(action){const [name,id]=action.split(':');if(name==='about'){openModal('RouteX '+host.version,'<p>xray · TUN · DPI</p><p>Icons: Lucide (ISC). Interface: Microsoft WebView2.</p>',()=>{},'Close');return;}if(name==='open-autoswitch'){openModal('Server autoswitch',autoswitchForm,()=>{},'Done');return;}if(name==='server-actions'||name==='about'){v5Perform(action);return;}if(name==='mini-menu'){state.miniOpen=!state.miniOpen;renderSidebar();icons();return;}if(name==='close-dialog'){app.querySelector('dialog').close();return;}if(name==='monitor-settings'){navigate('settings','window');return;}if(name==='open-monitor'){navigate('monitor');return;}if(name==='dpi-tab'){state.dpiTab=id;render();return;}if(name==='select-dpi'){state.selectedDpi=id;render();return;}if(name==='server-columns'){state.serverColumns=state.serverColumns==='all'?'compact':'all';render();return;}
- if(name==='add-list'){openModal('Add entry',field('Application / domain / IP','<textarea name="entry" rows="4" required autofocus></textarea>'),d=>{hostCall('listAdd',{name:id,value:d.entry});});return;}
+ if(name==='add-list'){openAppPicker(id);return;}
  if(name==='remove-list'){hostCall('listRemove',{name:id,value:state.selected}).catch(()=>{});return;}
  if(name==='copy-list'){copy(lists[id].filter(i=>!i.builtin).map(i=>i.id).join('\n'));return;}
  if(name==='config-protocol'){hostCall('config',{name:state.selectedConfig,field:'protocol',value:id});return;}
@@ -195,3 +195,38 @@ function markListScrollPage(){const main=app.querySelector('.rx-main');if(main)m
 const renderBeforeListScroll=render;render=function(reset=false){renderBeforeListScroll(reset);markListScrollPage();};
 const navigateBeforeListScroll=navigate;navigate=function(page,tab){navigateBeforeListScroll(page,tab);markListScrollPage();};
 markListScrollPage();
+// "+" in the Routing lists works as in the old interface: recently added apps first, then the running
+// processes (icons, TCP count, search, "with connections only"), multi-select, double-click adds, manual entry.
+const appPickerStyle=document.createElement('style');
+appPickerStyle.textContent=`#routex-routing-concept .r-pick-tools{display:flex;gap:12px;align-items:center}
+#routex-routing-concept .r-pick-tools input[type=search]{flex:1;min-width:0;font:inherit;font-size:calc(12px * var(--rx-font-scale,1));background:var(--rx-field);border:1px solid var(--rx-line);border-radius:6px;color:var(--rx-text);padding:9px 11px}
+#routex-routing-concept .r-pick-tools label{display:flex;gap:6px;align-items:center;color:var(--rx-muted);font-size:calc(11px * var(--rx-font-scale,1));white-space:nowrap;cursor:pointer}
+#routex-routing-concept .r-pick-list{height:min(320px,40dvh);overflow:auto;border:1px solid var(--rx-line);border-radius:6px;background:var(--rx-field);padding:4px}
+#routex-routing-concept .r-pick-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:5px;cursor:pointer;user-select:none;min-width:0;font-size:calc(12px * var(--rx-font-scale,1));color:var(--rx-text)}
+#routex-routing-concept .r-pick-row:hover{background:var(--rx-hover)}
+#routex-routing-concept .r-pick-row[aria-selected=true]{background:color-mix(in srgb,var(--rx-accent) 24%,transparent)}
+#routex-routing-concept .r-pick-row>span:nth-child(2){flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#routex-routing-concept .r-pick-row img{width:18px;height:18px;object-fit:contain;flex:none}
+#routex-routing-concept .r-pick-row .r-pick-ico{width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius:5px;background:var(--rx-soft);color:var(--rx-muted);flex:none}
+#routex-routing-concept .r-pick-row .r-pick-ico svg{width:11px;height:11px}
+#routex-routing-concept .r-pick-row small{color:var(--rx-muted);font-size:calc(11px * var(--rx-font-scale,1));white-space:nowrap}
+#routex-routing-concept .r-pick-row small.r-pick-recent{color:var(--rx-accent)}
+#routex-routing-concept .r-pick-empty{color:var(--rx-muted);font-size:calc(11px * var(--rx-font-scale,1));padding:10px 8px}`;
+document.head.append(appPickerStyle);
+let appPickerToken=0;
+function openAppPicker(list){
+ const L=text=>(host.labels&&host.labels[text])||text,token=++appPickerToken,chosen=new Set();let data=null;
+ const body=`<div class="r-pick-tools"><input type="search" data-pick-search placeholder="${esc(L('Search'))}" autocomplete="off" autofocus><label><input type="checkbox" data-pick-net> ${esc(L('With connections only'))}</label></div><div class="r-pick-list" data-pick-list><div class="r-pick-empty">${esc(L('Loading…'))}</div></div>`+field(L('Manual: process name (Discord.exe), path, domain or IP'),'<textarea name="entry" rows="2"></textarea>');
+ const submit=d=>{const manual=(d&&d.entry||'').trim(),value=[...chosen].concat(manual?[manual]:[]).join('\n');if(!value)return false;hostCall('listAdd',{name:list,value});};
+ openModal('Add entry',body,submit,L('Add'));
+ const dialog=app.querySelector('dialog'),box=dialog.querySelector('[data-pick-list]'),search=dialog.querySelector('[data-pick-search]'),net=dialog.querySelector('[data-pick-net]');
+ const row=(item,recent)=>{const tail=recent?L('recent'):(item.count>1?'×'+item.count+'  ':'')+(item.conns>0?item.conns+' TCP':'');return `<div class="r-pick-row" data-pick="${esc(item.name)}" aria-selected="${chosen.has(item.name)}" title="${esc(item.path||item.name)}">${item.icon?`<img src="${item.icon}" alt="">`:`<span class="r-pick-ico">${ico(/\.exe$/i.test(item.name)||item.name.includes('\\')?'app-window':'globe')}</span>`}<span>${esc(item.name)}</span>${tail?`<small${recent?' class="r-pick-recent"':''}>${esc(tail)}</small>`:''}</div>`;};
+ const draw=()=>{if(!data)return;const q=search.value.trim().toLowerCase(),match=item=>!q||item.name.toLowerCase().includes(q)||(item.path||'').toLowerCase().includes(q);
+  const recent=data.recent.filter(match),running=data.running.filter(item=>match(item)&&(!net.checked||item.conns>0));
+  box.innerHTML=recent.length||running.length?recent.map(item=>row(item,true)).join('')+running.map(item=>row(item,false)).join(''):`<div class="r-pick-empty">${esc(L('No entries.'))}</div>`;icons();};
+ search.addEventListener('input',draw);net.addEventListener('change',draw);
+ box.addEventListener('click',e=>{const item=e.target.closest('[data-pick]');if(!item)return;const name=item.dataset.pick;if(chosen.has(name))chosen.delete(name);else chosen.add(name);item.setAttribute('aria-selected',String(chosen.has(name)));});
+ box.addEventListener('dblclick',e=>{const item=e.target.closest('[data-pick]');if(!item)return;chosen.add(item.dataset.pick);dialog.querySelector('form').requestSubmit();});
+ search.focus();
+ rpc('appPicker',{name:list}).then(result=>{if(token!==appPickerToken||!dialog.open)return;data={recent:(result&&result.recent)||[],running:(result&&result.running)||[]};draw();}).catch(error=>{if(token!==appPickerToken||!dialog.open)return;data={recent:[],running:[]};draw();toast(error.message);});
+}
