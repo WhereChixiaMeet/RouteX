@@ -961,10 +961,53 @@ namespace NetProbe
 
         readonly Dictionary<string, List<string>> seenIps = new Dictionary<string, List<string>>();
         readonly HashSet<string> multiIpLogged = new HashSet<string>();
+        // The VPN IP on the card: Cloudflare's trace shows the address Cloudflare sees, and many servers send Cloudflare
+        // traffic through WARP or IPv6, so it is not the IP the rest of the internet sees. The real one comes from a
+        // non-Cloudflare service (AWS checkip, plain IPv4) through the tunnel: after connecting / switching, then every
+        // 5 minutes — one tiny request, not per probe. Display only; the router's tunnel check still uses the trace.
+        string vpnRealIp = "", vpnRealKey = ""; DateTime vpnRealAt = DateTime.MinValue; volatile bool vpnRealBusy;
+        string VpnRouteKey() { return (router.Active ? "r:" + (router.OnBackup ? st.BackupTunnel : st.PrimaryTunnel) : "") + (xm.Active ? "|x:" + st.ActiveServer : ""); }
+        bool VpnConnected() { return router.State == RouteState.Vpn || router.State == RouteState.Backup || (!router.Active && xm.State == XState.Connected); }
+        void RefreshVpnRealIp(string key)
+        {
+            var p = pVpn; if (p == null || vpnRealBusy) return;
+            vpnRealBusy = true; vpnRealAt = DateTime.Now;
+            string dIp = chs["direct"].Ip;
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                string ip = "";
+                try
+                {
+                    var r = p.Http("https://checkip.amazonaws.com/", Math.Max(4, st.TimeoutSec));
+                    System.Net.IPAddress a; string t = r != null && r.Ok ? (r.Body ?? "").Trim() : "";
+                    if (System.Net.IPAddress.TryParse(t, out a)) ip = t;
+                }
+                catch { }
+                try
+                {
+                    BeginInvoke((Action)(() =>
+                    {
+                        vpnRealBusy = false;
+                        // the answer must have come through the tunnel (not the Direct IP) for the same server it was asked for
+                        if (ip != "" && ip != dIp && key == VpnRouteKey()) { bool chg = vpnRealIp != ip || vpnRealKey != key; vpnRealIp = ip; vpnRealKey = key; if (chg) Logger.Write(LogLevel.Info, Tx("IP VPN (виден сайтам): ") + ip); }
+                    }));
+                }
+                catch { vpnRealBusy = false; }
+            });
+        }
+
         void OnSample(ChannelMonitor m, ProbeResult r, StatsSnapshot s)
         {
             if (!m.Running || bgProbe || cardVpn == null || cardVpn.IsDisposed) return;
             bool isVpn = m.Key == "vpn";
+            if (isVpn)
+            {
+                string key = VpnRouteKey();
+                if (key != vpnRealKey) vpnRealIp = ""; // another server / tunnel: the old IP is not shown as the current one
+                if (VpnConnected() && r.Ok && (key != vpnRealKey ? (DateTime.Now - vpnRealAt).TotalSeconds >= 20 : (DateTime.Now - vpnRealAt).TotalMinutes >= 5)) RefreshVpnRealIp(key);
+                // show the real VPN IP; location / node of the trace belong to the address Cloudflare saw, so they go with it
+                if (r.Ok && vpnRealIp != "" && r.Ip != "" && r.Ip != vpnRealIp) { r.Ip = vpnRealIp; r.Loc = ""; r.Colo = ""; }
+            }
             string name = isVpn ? "VPN" : Tx("Напрямую");
             var cs = chs[m.Key];
             var card = isVpn ? cardVpn : cardDir;

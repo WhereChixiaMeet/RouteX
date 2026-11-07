@@ -828,6 +828,7 @@ namespace NetProbe
             { ") — закрой эту программу или поменяй TunnelSocksPort в config\\settings.ini", ") — cierra ese programa o cambia TunnelSocksPort en config\\settings.ini" },
             { " · соединение с сервером сохранено", " · conexión con el servidor conservada" },
             { "Пробник VPN не получил ответа, но VPN отвечает по второму адресу — остаюсь на VPN", "La sonda VPN no obtuvo respuesta, pero la VPN responde en una segunda dirección — se mantiene la VPN" },
+            { "IP VPN (виден сайтам): ", "IP de la VPN (la que ven los sitios): " },
             { " — отложено: туннель используется", " — aplazado: el túnel está en uso" },
             { "Фоновый замер серверов", "Prueba de servidores en segundo plano" },
             { "Возврат на выбранный сервер", "Volver al servidor elegido" },
