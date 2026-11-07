@@ -47,7 +47,7 @@ namespace NetProbe
         readonly List<DateTime> switchTimes = new List<DateTime>();
         DateTime lastCheck = DateTime.MinValue, lastSwitch = DateTime.MinValue, lastBgTest = DateTime.Now, lastReturn = DateTime.Now, lastAllDownTry = DateTime.MinValue;
         int fails, slows; bool dpiOn, dpiApps; volatile bool died;
-        long downSinceCheck; bool busyLogged; // bytes the server sent back since the last health check (xray stats)
+        long downSinceCheck, lastPollDown; bool busyLogged; DateTime inUseLogged = DateTime.MinValue; // bytes the server sent back since the last health check (xray stats)
         bool statsOn = true; string statsId; DateTime lastStats = DateTime.MinValue, lastStatsSave = DateTime.Now; bool statsDirty;
         string lastErr = "";
 
@@ -127,7 +127,7 @@ namespace NetProbe
                     if (m.Groups[1].Value == "downlink") down += v; else up += v;
                 }
                 var srv = ServerStore.Find(statsId);
-                downSinceCheck += down;
+                downSinceCheck += down; lastPollDown = down;
                 if (srv != null && (down > 0 || up > 0)) { srv.TotalDown += down; srv.TotalUp += up; SessionDown += down; SessionUp += up; statsDirty = true; }
             }
             lastStats = DateTime.Now;
@@ -333,6 +333,15 @@ namespace NetProbe
             if (StartOn(next)) Set(XState.Connected, next.Name);
         }
 
+        // the server sent more than ~32 KB/s during the last stats poll (10 s): someone is using it, planned switches and
+        // background tests (dozens of test connections at once) wait — a switch drops every open connection
+        bool PostponeIfInUse(string what)
+        {
+            if (lastPollDown < 320 * 1024) return false;
+            if ((DateTime.Now - inUseLogged).TotalMinutes >= 10) { inUseLogged = DateTime.Now; Logger.Write(LogLevel.Route, what + Tx(" — отложено: туннель используется")); }
+            return true;
+        }
+
         void Tick()
         {
             if (abort.Cancelled) return;
@@ -395,7 +404,8 @@ namespace NetProbe
             }
 
             // возврат на выбранный вручную сервер
-            if (st.AsEnabled && st.AsReturnPreferred && st.PreferredServer != "" && st.PreferredServer != st.ActiveServer && (now - lastReturn).TotalMinutes >= st.AsReturnMin && CanSwitch(st))
+            if (st.AsEnabled && st.AsReturnPreferred && st.PreferredServer != "" && st.PreferredServer != st.ActiveServer && (now - lastReturn).TotalMinutes >= st.AsReturnMin && CanSwitch(st)
+                && !PostponeIfInUse(Tx("Возврат на выбранный сервер")))
             {
                 lastReturn = now;
                 var pref = ServerStore.Find(st.PreferredServer);
@@ -412,7 +422,7 @@ namespace NetProbe
             }
 
             // фоновые замеры кандидатов, чтобы при сбое сразу знать лучший
-            if (st.AsEnabled && st.AsBgTestMin > 0 && (now - lastBgTest).TotalMinutes >= st.AsBgTestMin)
+            if (st.AsEnabled && st.AsBgTestMin > 0 && (now - lastBgTest).TotalMinutes >= st.AsBgTestMin && !PostponeIfInUse(Tx("Фоновый замер серверов")))
             {
                 lastBgTest = now;
                 var pool = Pool(st, cur).Take(60).ToList();

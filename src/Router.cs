@@ -240,6 +240,7 @@ namespace NetProbe
             if (LastVpnOk == DateTime.MinValue) return;
             if (flowing)
             {
+                lastFlowAt = t;
                 if (failStreak > 0 && !busyLogged) { busyLogged = true; Logger.Write(LogLevel.Warn, Tx("Пробник VPN не отвечает, но данные через туннель идут — канал перегружен, остаюсь на VPN")); }
                 VpnSample(true, t, false, true);
                 return;
@@ -248,6 +249,22 @@ namespace NetProbe
             if (t > LastVpnOk) LastVpnOk = t;
         }
         bool busyLogged;
+        DateTime lastFlowAt = DateTime.MinValue, inUseLogged = DateTime.MinValue;
+
+        // Someone is using the tunnel right now (a game, a call, a download): planned restarts wait, because every restart
+        // drops all open connections. Only planned ones — a dead VPN still fails over at once.
+        bool InUse(Settings st)
+        {
+            if ((DateTime.Now - lastFlowAt).TotalSeconds < 60) return true;
+            var f = LinkRxRate; if (f == null) return false;
+            try { return f() >= 32 * 1024; } catch { return false; }
+        }
+        bool PostponeIfInUse(Settings st, string what)
+        {
+            if (!InUse(st)) return false;
+            if ((DateTime.Now - inUseLogged).TotalMinutes >= 10) { inUseLogged = DateTime.Now; Logger.Write(LogLevel.Route, what + Tx(" — отложено: туннель используется")); }
+            return true;
+        }
 
         // Download rate of the physical adapter, bytes/s (from SpeedMeter). A full link delays probes beyond their timeout;
         // while it is busy, the tunnel gets BusyFailoverSec instead of FailoverSec before it is declared down (bounded,
@@ -465,7 +482,8 @@ namespace NetProbe
                 ThreadPool.QueueUserWorkItem(_ => { try { int n = DomainRoutes.Learn(doms); if (n > 0) Logger.Write(LogLevel.Poll, Tx("Домены через DPI: новых IP из кэша DNS: ") + n); } catch { } finally { learning = false; } });
             }
             // новые IP попадут в DisallowedIPs только с перезапуском туннеля — не чаще DomainReapplyMin
-            if (st.DomainReapplyMin > 0 && DomainRoutes.Version != learnedVer && (now - tunnelAt).TotalMinutes >= st.DomainReapplyMin && Wg.Running && !StrictOnly)
+            // only WireSock needs it (DisallowedIPs); sing-box routes these domains exactly, a restart would just drop every connection
+            if (st.DomainReapplyMin > 0 && DomainRoutes.Version != learnedVer && (now - tunnelAt).TotalMinutes >= st.DomainReapplyMin && Wg.Running && !Wg.IsXray && !StrictOnly && !InUse(st))
             {
                 Logger.Write(LogLevel.Route, Tx("Домены через DPI: новые IP — перезапуск туннеля"));
                 StartTunnel(st, OnBackup, false);
@@ -610,12 +628,13 @@ namespace NetProbe
                         if (st.RunMode == RouteMode.Hybrid) { EnterDpi(st, why); return; }
                         Failovers++;
                         Logger.Write(LogLevel.Route, Tx("VPN недоступен: ") + why + (st.KillSwitch ? Tx(" · kill switch для «строго VPN»") : ""));
-                        lastCycle = now;
+                        lastCycle = wgDied ? now.AddSeconds(-30) : now; // the process crashed: restart on the next tick, not in 30 s
                         SetState(RouteState.VpnDown, why);
                         Kill(st, true);
                         return;
                     }
-                    if (State == RouteState.Backup && st.RetryPrimaryMin > 0 && (now - backupSince).TotalMinutes >= st.RetryPrimaryMin && Tunnels.Exists(st.PrimaryTunnel))
+                    if (State == RouteState.Backup && st.RetryPrimaryMin > 0 && (now - backupSince).TotalMinutes >= st.RetryPrimaryMin && Tunnels.Exists(st.PrimaryTunnel)
+                        && !PostponeIfInUse(st, Tx("Возврат на основной VPN")))
                     {
                         Logger.Write(LogLevel.Route, Tx("Пробую вернуться на основной VPN «") + st.PrimaryTunnel + "»");
                         if (StartTunnel(st, false, false)) SetState(RouteState.Vpn, st.PrimaryTunnel);
