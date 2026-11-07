@@ -852,6 +852,7 @@ namespace NetProbe
             { " · соединение с сервером сохранено", " · server connection kept" },
             { "Пробник VPN не получил ответа, но VPN отвечает по второму адресу — остаюсь на VPN", "VPN probe got no answer, but the VPN answers on a second address — staying on VPN" },
             { "IP VPN (виден сайтам): ", "VPN IP (seen by websites): " },
+            { "IP «Напрямую» (виден сайтам): ", "Direct IP (seen by websites): " },
             { " — отложено: туннель используется", " — postponed: the tunnel is in use" },
             { "Фоновый замер серверов", "Background server test" },
             { "Возврат на выбранный сервер", "Return to the chosen server" },
