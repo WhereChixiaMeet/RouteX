@@ -35,7 +35,7 @@ namespace NetProbe
         readonly System.Windows.Forms.Timer updTimer = new System.Windows.Forms.Timer { Interval = 30 * 60 * 1000 };
         readonly System.Windows.Forms.Timer appUpdTimer = new System.Windows.Forms.Timer { Interval = 20000 }; // проверка релизов NetProbe: через 20 с после старта, дальше раз в час
 
-        class ChState { public int FailRun; public DateTime FirstFail; public bool? Ok; public string Ip = "", Loc = "", Colo = ""; public DateTime DownSince; public DateTime LastNotify; public Level Lv = Level.Off; public string Val = "—"; }
+        class ChState { public int FailRun; public DateTime FirstFail; public bool? Ok; public string Ip = "", Loc = "", Colo = "", Warp = ""; public DateTime DownSince; public DateTime LastNotify; public Level Lv = Level.Off; public string Val = "—"; }
         bool sameRoute;
         readonly Dictionary<string, ChState> chs = new Dictionary<string, ChState> { { "vpn", new ChState() }, { "direct", new ChState() } };
 
@@ -959,6 +959,54 @@ namespace NetProbe
         static string F0(double v) { return v < 0 ? "—" : v.ToString("0", CultureInfo.InvariantCulture); }
         static string F1(double v) { return v < 0 ? "—" : v.ToString("0.0", CultureInfo.InvariantCulture); }
 
+        // Why the VPN exit IP (what websites see) can differ from the server you connect to: say it on the card
+        // instead of leaving a "wrong IP". The probe's exit is decided on the server, not here.
+        string lastVpnRoute = "";
+        string VpnRouteKey() { return (router.Active ? "r:" + (router.OnBackup ? st.BackupTunnel : st.PrimaryTunnel) : "") + (xm.Active ? "|x:" + st.ActiveServer : ""); }
+        string srvHostKey = ""; string srvHost = ""; DateTime srvHostAt = DateTime.MinValue;
+        string VpnServerHost()
+        {
+            string key = VpnRouteKey();
+            if (key == srvHostKey && (DateTime.Now - srvHostAt).TotalSeconds < 30) return srvHost;
+            string h = "";
+            try
+            {
+                if (router.Active)
+                {
+                    string n = router.OnBackup ? st.BackupTunnel : st.PrimaryTunnel;
+                    if (TunnelProto.IsXray(n)) { var e = TunnelProto.Load(n); if (e != null) h = e.Address; }
+                    else
+                    {
+                        string ep = Tunnels.Endpoint(n) ?? "";
+                        if (ep.StartsWith("[")) { int c = ep.IndexOf(']'); h = c > 0 ? ep.Substring(1, c - 1) : ep; }
+                        else h = ep.Count(ch => ch == ':') == 1 ? ep.Substring(0, ep.IndexOf(':')) : ep;
+                    }
+                }
+                else if (xm.Active) { var s = ServerStore.Find(st.ActiveServer); if (s != null) h = s.Address; }
+            }
+            catch { }
+            srvHostKey = key; srvHost = (h ?? "").Trim(); srvHostAt = DateTime.Now;
+            return srvHost;
+        }
+        string ExitNote(string ip, string warp)
+        {
+            if (ip == "") return "";
+            var notes = new List<string>();
+            if (warp == "on" || warp == "plus") notes.Add(Tx("через Cloudflare WARP на сервере"));
+            if (ip.Contains(":")) notes.Add("IPv6");
+            string dIp = chs["direct"].Ip;
+            if ((router.Active || xm.Active) && dIp != "" && ip == dIp) notes.Add(Tx("мимо туннеля"));
+            else
+            {
+                System.Net.IPAddress a;
+                string host = VpnServerHost();
+                // only an IP literal can be compared; a domain name may point anywhere
+                if (host != "" && System.Net.IPAddress.TryParse(host, out a) && host != ip && !ip.Contains(":") && warp != "on" && warp != "plus")
+                    notes.Add(Tx("сервер ") + host + Tx(" выходит в интернет с другого IP"));
+            }
+            return notes.Count > 0 ? "  ·  " + string.Join(" · ", notes) : "";
+        }
+
         readonly Dictionary<string, List<string>> seenIps = new Dictionary<string, List<string>>();
         readonly HashSet<string> multiIpLogged = new HashSet<string>();
         void OnSample(ChannelMonitor m, ProbeResult r, StatsSnapshot s)
@@ -1025,7 +1073,9 @@ namespace NetProbe
             if (cs.Ok == null) cs.DownSince = DateTime.Now;
             if (!r.Ok && cs.Ok != false) cs.DownSince = cs.FirstFail;
             cs.Ok = r.Ok;
-            if (r.Ok && r.Ip != "") { bool chg = cs.Ip != r.Ip; cs.Ip = r.Ip; cs.Loc = r.Loc; cs.Colo = r.Colo; if (chg) UpdateInfo(); }
+            // another server / tunnel: the last known exit IP belongs to the old one, never show it as the current VPN IP
+            if (isVpn) { string route = VpnRouteKey(); if (route != lastVpnRoute) { lastVpnRoute = route; cs.Ip = cs.Loc = cs.Colo = cs.Warp = ""; } }
+            if (r.Ok && r.Ip != "") { bool chg = cs.Ip != r.Ip; cs.Ip = r.Ip; cs.Loc = r.Loc; cs.Colo = r.Colo; cs.Warp = r.Warp; if (chg) UpdateInfo(); }
             var other = chs[isVpn ? "direct" : "vpn"];
             bool same = r.Ok && other.Ok == true && cs.Ip != "" && cs.Ip == other.Ip;
             if (same != sameRoute)
@@ -1044,7 +1094,7 @@ namespace NetProbe
             // опросы по кругу: IP и страну даёт только trace — у остальных сайтов показываем последние известные
             bool known = r.Ip == "" && cs.Ip != "";
             string ipS = r.Ip != "" ? r.Ip : known ? cs.Ip : r.RemoteIp, locS = r.Ip != "" ? r.Loc : known ? cs.Loc : "", coloS = r.Ip != "" ? r.Colo : known ? cs.Colo : "";
-            card.Line1 = r.Ok ? "IP " + ipS + (locS != "" ? "  ·  " + locS : "") + (coloS != "" ? Tx("  ·  узел ") + coloS : "") + "  ·  HTTP " + r.Code : "✗  " + r.Error;
+            card.Line1 = r.Ok ? "IP " + ipS + (locS != "" ? "  ·  " + locS : "") + (coloS != "" ? Tx("  ·  узел ") + coloS : "") + (isVpn ? ExitNote(r.Ip != "" ? r.Ip : known ? cs.Ip : "", r.Ip != "" ? r.Warp : cs.Warp) : "") + "  ·  HTTP " + r.Code : "✗  " + r.Error;
             card.Line2 = r.Ok ? "DNS " + F0(r.Dns) + "  ·  TCP " + F0(r.Connect) + "  ·  TLS " + F0(r.Tls) + Tx("  ·  всего ") + F0(r.Total) + Tx(" мс")
                               : Tx("Повтор через ") + F1(m.EffectiveIntervalMs / 1000) + Tx(" с (после ") + m.ConsecutiveFails + Tx(" ошибок)");
             card.Line3 = Tx("ср ") + F0(s.Avg) + Tx("  ·  мин ") + F0(s.Min) + Tx("  ·  макс ") + F0(s.Max) + Tx("  ·  джиттер ") + F1(s.Jitter) + "  ·  failed probes " + F1(s.LossPct) + "%  ·  probe uptime " + F1(s.Uptime) + "%  ·  probe gaps " + s.Drops;

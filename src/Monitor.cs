@@ -78,6 +78,7 @@ namespace NetProbe
         readonly System.Diagnostics.Stopwatch requestClock=System.Diagnostics.Stopwatch.StartNew();
         long lastRequestAt=-1;
         readonly ProbeEndpointSelector endpoints=new ProbeEndpointSelector();
+        readonly Random jitter=new Random(Guid.NewGuid().GetHashCode());
 
         Thread th; volatile bool running; readonly AutoResetEvent wake = new AutoResetEvent(false);
         public bool Running { get { return running; } }
@@ -101,7 +102,8 @@ namespace NetProbe
             {
                 var st = GetSettings();
                 double rate = Math.Max(Settings.MinPollRate, Math.Min(st.MaxPollRate, Key == "direct" ? st.DirectPollRate : st.PollRate));
-                double interval = Math.Max(Settings.MinIntervalMs, 1000.0 / rate);
+                // up to +25 % random spread: no exact clockwork beacon in the traffic, and never faster than the configured cap
+                double interval = Math.Max(Settings.MinIntervalMs, 1000.0 / rate) * (1 + jitter.NextDouble() * 0.25);
                 if (Paused) { wake.WaitOne(500); continue; }
                 var t0 = DateTime.Now;
                 if (Passive != null && st.ProbePassive && (NeedLatencySamples==null||!NeedLatencySamples()) && ConsecutiveFails == 0 && (t0 - lastActive).TotalSeconds < st.ProbeIdleSec)

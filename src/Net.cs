@@ -93,7 +93,7 @@ namespace NetProbe
         public int Code, Exit = -1;
         public double Dns = -1, Connect = -1, Tls = -1, Ttfb = -1, Total = -1, Lat = -1;
         public double SpeedDown, SpeedUp, SizeDown, SizeUp;
-        public string RemoteIp = "", Ip = "", Loc = "", Colo = "", Error = "", Body = "";
+        public string RemoteIp = "", Ip = "", Loc = "", Colo = "", Warp = "", Error = "", Body = "";
         public DateTime Time = DateTime.Now;
         public string TargetUrl="";
         public double Latency { get { return Lat >= 0 ? Lat : Total; } }
@@ -122,6 +122,7 @@ namespace NetProbe
                 if (l.StartsWith("ip=")) r.Ip = l.Substring(3);
                 else if (l.StartsWith("loc=")) r.Loc = l.Substring(4);
                 else if (l.StartsWith("colo=")) r.Colo = l.Substring(5);
+                else if (l.StartsWith("warp=")) r.Warp = l.Substring(5); // off / on / plus: the server sends Cloudflare traffic through WARP
             }
         }
 
