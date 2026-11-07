@@ -828,7 +828,6 @@ namespace NetProbe
             { ") — закрой эту программу или поменяй TunnelSocksPort в config\\settings.ini", ") — cierra ese programa o cambia TunnelSocksPort en config\\settings.ini" },
             { " · соединение с сервером сохранено", " · conexión con el servidor conservada" },
             { "Пробник VPN не получил ответа, но VPN отвечает по второму адресу — остаюсь на VPN", "La sonda VPN no obtuvo respuesta, pero la VPN responde en una segunda dirección — se mantiene la VPN" },
-            { " выходит в интернет с другого IP", " sale a internet con otra IP" },
             { "сервер ", "servidor " },
             { "мимо туннеля", "fuera del túnel" },
             { "через Cloudflare WARP на сервере", "vía Cloudflare WARP en el servidor" },

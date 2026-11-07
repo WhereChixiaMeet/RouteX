@@ -985,7 +985,27 @@ namespace NetProbe
                 else if (xm.Active) { var s = ServerStore.Find(st.ActiveServer); if (s != null) h = s.Address; }
             }
             catch { }
-            srvHostKey = key; srvHost = (h ?? "").Trim(); srvHostAt = DateTime.Now;
+            h = (h ?? "").Trim();
+            // a domain name: show the address it points to (IPv4 first) — that is the server you really connect to
+            // (resolved in the background so a slow DNS never freezes the window; until then the name is shown)
+            System.Net.IPAddress lit;
+            bool isName = h != "" && !System.Net.IPAddress.TryParse(h, out lit);
+            if (key != srvHostKey || !isName) srvHost = h; // same server: keep the resolved address while it is refreshed
+            srvHostKey = key; srvHostAt = DateTime.Now;
+            if (isName)
+            {
+                string name = h;
+                ThreadPool.QueueUserWorkItem(_ =>
+                {
+                    try
+                    {
+                        var all = System.Net.Dns.GetHostAddresses(name);
+                        var pick = all.FirstOrDefault(x => x.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork) ?? all.FirstOrDefault();
+                        if (pick != null) BeginInvoke((Action)(() => { if (srvHostKey == key) srvHost = pick.ToString(); }));
+                    }
+                    catch { }
+                });
+            }
             return srvHost;
         }
         string ExitNote(string ip, string warp)
@@ -996,14 +1016,9 @@ namespace NetProbe
             if (ip.Contains(":")) notes.Add("IPv6");
             string dIp = chs["direct"].Ip;
             if ((router.Active || xm.Active) && dIp != "" && ip == dIp) notes.Add(Tx("мимо туннеля"));
-            else
-            {
-                System.Net.IPAddress a;
-                string host = VpnServerHost();
-                // only an IP literal can be compared; a domain name may point anywhere
-                if (host != "" && System.Net.IPAddress.TryParse(host, out a) && host != ip && !ip.Contains(":") && warp != "on" && warp != "plus")
-                    notes.Add(Tx("сервер ") + host + Tx(" выходит в интернет с другого IP"));
-            }
+            // the server you connect to; when websites see another IP, both are on the card
+            string host = (router.Active || xm.Active) ? VpnServerHost() : "";
+            if (host != "" && host != ip) notes.Insert(0, Tx("сервер ") + host);
             return notes.Count > 0 ? "  ·  " + string.Join(" · ", notes) : "";
         }
 
