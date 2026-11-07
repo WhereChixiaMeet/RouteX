@@ -42,3 +42,29 @@ function openServerMenu(row,x,y){
  placeContextMenu(menu,x,y);
 }
 app.addEventListener('contextmenu',event=>{const row=event.target.closest('[data-server-row]');if(!row)return;event.preventDefault();event.stopImmediatePropagation();openServerMenu(row,event.clientX,event.clientY);},true);
+
+// Subscriptions: dense rows (one line per server, ~30px instead of 70px) and a slimmer header, so a long subscription
+// fits on one screen. Country / group and transport stay visible inline in muted text.
+const denseSubsStyle=document.createElement('style');denseSubsStyle.textContent=`
+#routex-routing-concept .rx-window .r-subs-status{padding:9px 16px}
+#routex-routing-concept .rx-window .r-subs-status .r-panelhead{gap:10px}
+#routex-routing-concept .rx-window .r-subs-heading{gap:10px}
+#routex-routing-concept .rx-window .r-subs-heading h3{font-size:calc(14px * var(--rx-font-scale,1));margin:0 0 1px}
+#routex-routing-concept .rx-window .r-subs-heading small{font-size:calc(11px * var(--rx-font-scale,1))}
+#routex-routing-concept .rx-window .r-subs-toolbar{margin:8px 0 6px;gap:6px}
+#routex-routing-concept .rx-window .r-subs-tabsrow{margin:0 0 6px;gap:8px}
+#routex-routing-concept .rx-window .r-subs-tabsrow .r-pills{padding-bottom:4px}
+#routex-routing-concept .rx-window .r-subs-tabsrow .r-tab{padding:5px 10px}
+#routex-routing-concept .rx-window .r-subs-table th{padding:6px 10px}
+#routex-routing-concept .rx-window .r-subs-table td{height:auto;padding:4px 10px;line-height:1.35;vertical-align:middle}
+#routex-routing-concept .rx-window .r-subs-table td:first-child{width:28px;padding:2px 4px 2px 8px}
+#routex-routing-concept .rx-window .r-subs-table td:first-child .r-iconbutton{padding:3px}
+#routex-routing-concept .rx-window .r-subs-table td>small{display:inline;margin:0 0 0 8px;font-size:calc(11px * var(--rx-font-scale,1))}
+#routex-routing-concept .rx-window .r-subs-table td:nth-child(2)>strong{display:inline-block;max-width:min(38vw,460px);overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
+#routex-routing-concept .rx-window .r-subs-table td .r-button{min-height:0;padding:2px 9px;gap:5px}
+#routex-routing-concept .rx-window .r-subs-table td .r-button svg{width:13px;height:13px}
+#routex-routing-concept .rx-window .r-subs-toolbar .r-button,#routex-routing-concept .rx-window .r-subs-tabsrow .r-button{min-height:28px;padding:4px 10px}
+#routex-routing-concept .rx-window .r-subs-toolbar .r-search,#routex-routing-concept .rx-window .r-subs-tabsrow .r-search{min-height:28px;padding-top:4px;padding-bottom:4px}
+#routex-routing-concept .rx-window .r-subs-tabsrow .r-combo-trigger,#routex-routing-concept .rx-window .r-subs-status .r-combo-trigger{min-height:28px;padding:4px 10px}
+#routex-routing-concept .rx-window .r-subs-footer{margin:6px 2px 6px}
+`;document.head.append(denseSubsStyle);
