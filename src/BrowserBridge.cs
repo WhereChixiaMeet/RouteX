@@ -131,6 +131,8 @@ namespace NetProbe
             Func<IEnumerable<string>,object> entries = list=>list.Select(x=>new {id=x,name=x==ListCard.BuiltIn?"RouteX.Checker":x,builtin=x==ListCard.BuiltIn,icon=BrowserEntryIcon(x)}).ToArray();
             Func<IndicatorCard,object> indicator = c=>new {title=c.Title,sub=c.Sub,value=c.Value,unit=c.Unit,line1=c.Line1,line2=c.Line2,line3=c.Line3,level=(int)c.Level,badge=c.Badge};
             Func<List<double>,double?[]> samples = a=>a.Select(v=>double.IsNaN(v)||double.IsInfinity(v)?(double?)null:v).ToArray();
+            // latency: a single failed probe (LatencyChart.Blip) is -1, not a gap; only a confirmed outage (NaN) breaks the line
+            Func<List<double>,double?[]> latency = a=>a.Select(v=>double.IsNegativeInfinity(v)?(double?)-1:double.IsNaN(v)||double.IsInfinity(v)?(double?)null:v).ToArray();
             return new {
                 version=shownVersion,settings,uiPreview=review,paths=new {dpi=st.ZapretPath},activeConfig=router.Active?router.Wg.TunnelName:st.PrimaryTunnel,whatsNew=st.WhatsNewPending==Version&&st.WhatsNewShownFor!=Version,
                 fonts=browserFonts.Value,languages=Tr.Codes.Select((code,i)=>new {id=code,name=Tr.Names[i]}).ToArray(),
@@ -148,7 +150,7 @@ namespace NetProbe
                 profiles=DpiConfigs.Names().Select(n=>new {id=n,name=n,args=DpiConfigs.Read(n)}).ToArray(),
                 dpiDomains=string.Join("\n",AppLists.Get(AppLists.DpiDomains)),dpiExclude=string.Join("\n",AppLists.DpiSitesExcl()),
                 channels=new {vpn=indicator(cardVpn),direct=indicator(cardDir)},
-                chart=new {vpn=samples(chart.HA??chart.A),direct=samples(chart.HB??chart.B),timeVpn=chart.TA.Select(t=>new DateTimeOffset(t).ToUnixTimeMilliseconds()).ToArray(),timeDirect=chart.TB.Select(t=>new DateTimeOffset(t).ToUnixTimeMilliseconds()).ToArray()},
+                chart=new {vpn=latency(chart.HA??chart.A),direct=latency(chart.HB??chart.B),timeVpn=chart.TA.Select(t=>new DateTimeOffset(t).ToUnixTimeMilliseconds()).ToArray(),timeDirect=chart.TB.Select(t=>new DateTimeOffset(t).ToUnixTimeMilliseconds()).ToArray()},
                 speed=new {down=samples(speedChart.Down),up=samples(speedChart.Up),adapter=speedChart.Adapter},
                 currentSpeed=new {download=st.SpeedOn&&speedChart.Down.Count>0?(speedChart.Down.Last()/8).ToString("0.0",System.Globalization.CultureInfo.InvariantCulture)+" MB/s":"—",upload=st.SpeedOn&&speedChart.Up.Count>0?(speedChart.Up.Last()/8).ToString("0.0",System.Globalization.CultureInfo.InvariantCulture)+" MB/s":"—"},
                 tests=BrowserGrid(grid),sites=BrowserGrid(siteGrid),testRunning=runner!=null,testProgress=prog.Value,progress=progLabel.Text,
