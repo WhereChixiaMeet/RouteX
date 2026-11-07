@@ -113,7 +113,9 @@ namespace NetProbe
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics; Gfx.Hq(g);
-            g.Clear(BackColor);
+            // the theme can change while the widget is open (dark ⇄ light, custom palette): always paint the current one
+            if (BackColor != Theme.Widget) BackColor = Theme.Widget;
+            g.Clear(Theme.Widget);
             if (Theme.Classic) { using (var p = new Pen(Color.Black)) g.DrawRectangle(p, 0, 0, Width - 1, Height - 1); Gfx.Bevel(g, new Rectangle(1, 1, Width - 2, Height - 2), true); }
             else if (!win11) Gfx.DrawRound(g, Theme.Border, new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f), Theme.S(10));
             else using (var p = new Pen(Theme.Border)) g.DrawRectangle(p, 0, 0, Width - 1, Height - 1);

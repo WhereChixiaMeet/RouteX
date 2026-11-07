@@ -60,6 +60,7 @@ namespace NetProbe
             Tr.Set(st.Lang);
             AppLists.ZapretLists = st.ZapretListsPath;
             PushFonts();
+            Theme.AfterApply = ApplyInterfacePalette;
             Theme.Apply((ThemeKind)st.Theme);
             startHidden = startMinimized || st.StartMinimized;
             Logger.ToFile = st.LogToFile; Logger.Dir = st.LogPath; Logger.Retention = st.Retention;
@@ -850,6 +851,39 @@ namespace NetProbe
             }
         }
 
+        // The interface (WebView) has its own palettes; the native widget, tray menu and dialogs use Theme. Copy the
+        // interface's colors into Theme so everything matches: the custom palette, the VPN line in the accent color
+        // (as the interface draws it) and the Direct line of each theme.
+        static readonly Dictionary<string, string> DarkPalette = new Dictionary<string, string> {
+            { "bg", "#0d0f13" }, { "side", "#111319" }, { "panel", "#181b22" }, { "soft", "#1f232c" }, { "line", "#282d38" }, { "field", "#12151b" },
+            { "text", "#e6e8ee" }, { "muted", "#949daf" }, { "accent2", "#94a3b8" }, { "vpn", "#9a6bff" }, { "direct", "#06b6d4" } };
+        void ApplyInterfacePalette()
+        {
+            Func<string, Color?> hex = h => { try { return string.IsNullOrEmpty(h) ? (Color?)null : ColorTranslator.FromHtml(h); } catch { return null; } };
+            if (st.UiCustomTheme)
+            {
+                var p = new Dictionary<string, string>(DarkPalette);
+                try
+                {
+                    var saved = new System.Web.Script.Serialization.JavaScriptSerializer().Deserialize<Dictionary<string, string>>(string.IsNullOrEmpty(st.UiPalette) ? "{}" : st.UiPalette);
+                    if (saved != null) foreach (var kv in saved) p[kv.Key] = kv.Value;
+                }
+                catch { }
+                Action<string, Action<Color>> set = (key, apply) => { var c = hex(p.ContainsKey(key) ? p[key] : null); if (c != null) apply(c.Value); };
+                set("bg", c => Theme.Bg = c); set("side", c => Theme.Side = c); set("panel", c => Theme.Card = c); set("soft", c => Theme.CardHi = c);
+                set("line", c => Theme.Border = c); set("field", c => Theme.Input = c); set("text", c => Theme.Text = c); set("muted", c => Theme.Muted = c);
+                set("accent2", c => Theme.Accent2 = c); set("vpn", c => Theme.Vpn = c); set("direct", c => Theme.Direct = c);
+                Theme.Dim = Theme.Mix(Theme.Muted, Theme.Bg, 0.4); Theme.Grid = Theme.Mix(Theme.Border, Theme.Bg, 0.4); Theme.Hilite = Theme.Mix(Theme.Border, Theme.Text, 0.2);
+                Theme.DarkOverride = Theme.Bg.R * 0.299 + Theme.Bg.G * 0.587 + Theme.Bg.B * 0.114 < 128;
+            }
+            else
+            {
+                Theme.Vpn = Theme.AccentColor; // the interface draws the VPN line in the accent color
+                if (Theme.Kind == ThemeKind.Light) Theme.Direct = Color.FromArgb(8, 145, 178); // #0891b2, the interface's light Direct
+            }
+            Theme.Widget = Theme.Card; // the widget is a card of the app, in the same color
+        }
+
         void UpdateInfo()
         {
             if (infoLabel == null || infoLabel.IsDisposed) return;
@@ -1159,7 +1193,7 @@ namespace NetProbe
         // в виджетах — тип подключения: протокол сервера (VLESS · REALITY · xray) или туннеля (WIREGUARD · WireSock)
         void UpdateWidgetHeader()
         {
-            string h = AnyActive ? EngineText() : "";
+            string h = AnyActive ? EngineShort() : "";
             foreach (var w in new[] { widget, widget2 })
                 if (w != null && !w.IsDisposed && w.Header != h) { w.Header = h; w.Invalidate(); }
         }
@@ -1192,7 +1226,7 @@ namespace NetProbe
             w.OpenRequested += (s, e) => RestoreFromTray();
             if (second) w.Moved += (s, e) => { st.Widget2X = w.Left; st.Widget2Y = w.Top; st.Save(); };
             else w.Moved += (s, e) => { st.WidgetX = w.Left; st.WidgetY = w.Top; st.Save(); };
-            w.Header = AnyActive ? EngineText() : "";
+            w.Header = AnyActive ? EngineShort() : "";
             if (second) w.SetParts(false, true); else { bool wp = st.WidgetPing && MonOn, wsp = st.WidgetSpeedOn; if (wp || wsp) w.SetParts(wp, wsp && !(st.WidgetSplit && wp)); }
             if (!second) HookWidgetChars(w);
             return w;

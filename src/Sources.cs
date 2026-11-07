@@ -67,6 +67,33 @@ namespace NetProbe
             return "WIREGUARD · WireSock";
         }
 
+        // Short label for the widget and the sidebar: only the protocol (VLESS, VMess, Trojan, WireGuard); the Monitor
+        // card keeps the full transport / security / engine line from EngineText
+        string EngineShort()
+        {
+            bool subs = xm.Active && !router.Active || !router.Active && ActiveSource() == Source.Subs;
+            string proto = null;
+            if (subs) { var cur = ServerStore.Find(st.ActiveServer); proto = cur != null ? cur.Protocol : null; }
+            else
+            {
+                if (ActiveSource() == Source.None) return "";
+                string t = router.Active && router.OnBackup ? st.BackupTunnel : st.PrimaryTunnel;
+                if (string.IsNullOrEmpty(t)) return "";
+                if (!TunnelProto.IsXray(t)) return "WireGuard";
+                var e = TunnelProto.Load(t); proto = e != null ? e.Protocol : null;
+            }
+            switch ((proto ?? "").ToLowerInvariant())
+            {
+                case "vless": return "VLESS";
+                case "vmess": return "VMess";
+                case "trojan": return "Trojan";
+                case "shadowsocks": case "ss": return "Shadowsocks";
+                case "socks": return "SOCKS";
+                case "http": return "HTTP";
+                default: return string.IsNullOrEmpty(proto) ? "" : proto.ToUpperInvariant();
+            }
+        }
+
         void UpdateEngineLabel()
         {
             if (cardVpn == null || cardVpn.IsDisposed || pVpn == null) return;

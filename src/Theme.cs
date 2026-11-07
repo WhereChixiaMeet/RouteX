@@ -16,7 +16,12 @@ namespace NetProbe
 
         public static ThemeKind Kind = ThemeKind.Dark;
         public static bool Classic { get { return Kind == ThemeKind.Classic; } }
-        public static bool IsDark { get { return Kind == ThemeKind.Dark || Personal; } }
+        public static bool IsDark { get { return DarkOverride ?? (Kind == ThemeKind.Dark || Personal); } }
+        // set by AfterApply when a custom palette decides it (a light custom palette is not dark although Kind is Dark)
+        public static bool? DarkOverride;
+        // runs at the end of Apply: MainForm copies the interface's palette (custom colors, accent VPN line) so the
+        // native parts — desktop widget, tray, dialogs — look like the app
+        public static Action AfterApply;
         // Personal-темы (Chisa / Kurumi): тёмная основа, своя палитра и скин контролов
         public static bool Personal { get { return Kind == ThemeKind.Chisa || Kind == ThemeKind.Kurumi; } }
 
@@ -127,6 +132,8 @@ namespace NetProbe
             Vpn = k == ThemeKind.Classic ? C(0, 120, 215) : k == ThemeKind.Chisa ? C(224, 49, 59) : k == ThemeKind.Kurumi ? C(224, 64, 90) : C(139, 92, 246);
             Direct = k == ThemeKind.Classic ? C(0, 153, 153) : k == ThemeKind.Chisa ? C(127, 167, 217) : k == ThemeKind.Kurumi ? C(212, 166, 74) : C(6, 182, 212);
             if (k != ThemeKind.Chisa && k != ThemeKind.Kurumi) Accent2 = Accent;
+            DarkOverride = null;
+            var after = AfterApply; if (after != null) try { after(); } catch { }
             MakeFonts();
         }
 
