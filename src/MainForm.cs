@@ -1100,7 +1100,8 @@ namespace NetProbe
             card.Value = r.Ok ? F0(r.Latency) : "—";
             // опросы по кругу: IP и страну даёт только trace — у остальных сайтов показываем последние известные
             bool known = r.Ip == "" && cs.Ip != "";
-            string ipS = r.Ip != "" ? r.Ip : known ? cs.Ip : "—", // never r.RemoteIp: that is the probed website's address, not yours locS = r.Ip != "" ? r.Loc : known ? cs.Loc : "", coloS = r.Ip != "" ? r.Colo : known ? cs.Colo : "";
+            // never r.RemoteIp: that is the probed website's address, not yours
+            string ipS = r.Ip != "" ? r.Ip : known ? cs.Ip : "—", locS = r.Ip != "" ? r.Loc : known ? cs.Loc : "", coloS = r.Ip != "" ? r.Colo : known ? cs.Colo : "";
             card.Line1 = r.Ok ? "IP " + ipS + (locS != "" ? "  ·  " + locS : "") + (coloS != "" ? Tx("  ·  узел ") + coloS : "") + "  ·  HTTP " + r.Code : "✗  " + r.Error;
             card.Line2 = r.Ok ? "DNS " + F0(r.Dns) + "  ·  TCP " + F0(r.Connect) + "  ·  TLS " + F0(r.Tls) + Tx("  ·  всего ") + F0(r.Total) + Tx(" мс")
                               : Tx("Повтор через ") + F1(m.EffectiveIntervalMs / 1000) + Tx(" с (после ") + m.ConsecutiveFails + Tx(" ошибок)");
