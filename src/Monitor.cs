@@ -116,6 +116,14 @@ namespace NetProbe
                         continue;
                     }
                 }
+                // After a failed probe the active probe keeps running (stats, recovery), but if data still comes back
+                // through the server the tunnel is alive and only the link is saturated: tell the router at once.
+                if (Passive != null && st.ProbePassive && ConsecutiveFails > 0)
+                {
+                    TunnelFlowState fs = TunnelFlowState.Unavailable;
+                    try { fs = Passive(); } catch { }
+                    if (fs == TunnelFlowState.Flowing) { var ps = PassiveSample; if (ps != null) try { ps(this, fs); } catch { } }
+                }
                 // Settings changes can wake the loop; waking must not bypass the
                 // request interval. Use monotonic time, independent of clock changes.
                 if(lastRequestAt>=0){double remaining=interval-(requestClock.Elapsed.TotalMilliseconds-lastRequestAt);if(remaining>0){wake.WaitOne((int)Math.Ceiling(remaining));continue;}}

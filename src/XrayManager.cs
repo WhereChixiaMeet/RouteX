@@ -47,6 +47,7 @@ namespace NetProbe
         readonly List<DateTime> switchTimes = new List<DateTime>();
         DateTime lastCheck = DateTime.MinValue, lastSwitch = DateTime.MinValue, lastBgTest = DateTime.Now, lastReturn = DateTime.Now, lastAllDownTry = DateTime.MinValue;
         int fails, slows; bool dpiOn, dpiApps; volatile bool died;
+        long downSinceCheck; bool busyLogged; // bytes the server sent back since the last health check (xray stats)
         bool statsOn = true; string statsId; DateTime lastStats = DateTime.MinValue, lastStatsSave = DateTime.Now; bool statsDirty;
         string lastErr = "";
 
@@ -126,6 +127,7 @@ namespace NetProbe
                     if (m.Groups[1].Value == "downlink") down += v; else up += v;
                 }
                 var srv = ServerStore.Find(statsId);
+                downSinceCheck += down;
                 if (srv != null && (down > 0 || up > 0)) { srv.TotalDown += down; srv.TotalUp += up; SessionDown += down; SessionUp += up; statsDirty = true; }
             }
             lastStats = DateTime.Now;
@@ -205,7 +207,7 @@ namespace NetProbe
             statsId = null;
             x.Stop();
             EnsurePorts(st);
-            fails = 0; slows = 0;
+            fails = 0; slows = 0; downSinceCheck = 0;
             string cfg = Path.Combine(Settings.Sub("runtime"), "xray.json");
             string err = null;
             for (int attempt = 0; attempt < 2; attempt++)
@@ -367,7 +369,7 @@ namespace NetProbe
                 LastDelay = d;
                 if (d > 0)
                 {
-                    LastOk = now; fails = 0;
+                    LastOk = now; fails = 0; busyLogged = false; downSinceCheck = 0;
                     if (cur != null) { cur.Delay = d; cur.Tested = now; }
                     slows = st.AsMaxLatency > 0 && d > st.AsMaxLatency ? slows + 1 : 0;
                     if (slows >= st.AsSlowCount) { SwitchAway(st, cur, Tx("медленно: ") + d + Tx(" мс")); return; }
@@ -376,6 +378,16 @@ namespace NetProbe
                 }
                 else
                 {
+                    // the check timed out, but the server keeps sending data: the link is saturated, the server is fine.
+                    // Switching would kill every open connection (games, calls) for nothing.
+                    PollStats(false);
+                    if (downSinceCheck >= 64 * 1024)
+                    {
+                        if (!busyLogged) { busyLogged = true; Logger.Write(LogLevel.Warn, Tx("Проверка сервера не прошла, но данные через сервер идут — канал перегружен, сервер не меняю")); }
+                        downSinceCheck = 0;
+                        Fire();
+                        return;
+                    }
                     fails++;
                     Fire();
                     if (fails >= st.AsFails) { SwitchAway(st, cur, Tx("нет ответа ") + fails + Tx(" раз")); return; }

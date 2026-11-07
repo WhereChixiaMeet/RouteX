@@ -828,6 +828,8 @@ namespace NetProbe
             { ") — закрой эту программу или поменяй TunnelSocksPort в config\\settings.ini", ") — cierra ese programa o cambia TunnelSocksPort en config\\settings.ini" },
             { " · соединение с сервером сохранено", " · conexión con el servidor conservada" },
             { "Пробник VPN не получил ответа, но VPN отвечает по второму адресу — остаюсь на VPN", "La sonda VPN no obtuvo respuesta, pero la VPN responde en una segunda dirección — se mantiene la VPN" },
+            { "Проверка сервера не прошла, но данные через сервер идут — канал перегружен, сервер не меняю", "La comprobación del servidor falló, pero los datos pasan por el servidor — el enlace está saturado, se mantiene el servidor" },
+            { "Пробник VPN не отвечает, но данные через туннель идут — канал перегружен, остаюсь на VPN", "La sonda VPN no obtuvo respuesta, pero los datos pasan por el túnel — el enlace está saturado, se mantiene la VPN" },
             { "Состояние туннеля при падении: ", "Estado del túnel en la caída: " },
             { "работает", "en marcha" },
             { "xray не работает", "xray detenido" },

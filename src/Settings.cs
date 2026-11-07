@@ -56,6 +56,8 @@ namespace NetProbe
         public bool BackupEnabled = false;
         public int FailoverSec = 7;          // сколько секунд VPN может молчать до переключения
         public int RecoverSec = 15;          // сколько секунд VPN должен стабильно работать для возврата
+        public int BusyFailoverSec = 30;     // канал загружен (игра качает аватары и т.п.): столько секунд тишины пробника до переключения
+        public int BusyRxKBps = 200;         // «канал загружен» — приём физического адаптера от стольких КБ/с (0 = не учитывать)
         public int RetryPrimaryMin = 5;      // на резервном VPN: как часто пробовать вернуться на основной (0 = никогда)
         public bool KillSwitch = true;       // блокировать «только VPN» приложения, пока VPN недоступен
         public bool AutoConnect = true;      // по умолчанию VPN включается сам при запуске (в т.ч. автозапуске)
@@ -340,7 +342,7 @@ namespace NetProbe
             GoodMs = Math.Max(10, Math.Min(2000, GoodMs));
             WarnMs = Math.Max(GoodMs + 10, Math.Min(5000, WarnMs));
             WidgetOpacity = Math.Max(30, Math.Min(100, WidgetOpacity));
-            FailoverSec = Math.Max(3, Math.Min(120, FailoverSec));
+            FailoverSec = Math.Max(3, Math.Min(120, FailoverSec)); BusyFailoverSec = Math.Max(3, Math.Min(300, BusyFailoverSec)); BusyRxKBps = Math.Max(0, Math.Min(1000000, BusyRxKBps));
             RecoverSec = Math.Max(3, Math.Min(600, RecoverSec));
             RetryPrimaryMin = Math.Max(0, Math.Min(240, RetryPrimaryMin));
             ExclRefreshSec = Math.Max(3, Math.Min(300, ExclRefreshSec));

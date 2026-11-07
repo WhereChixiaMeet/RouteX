@@ -216,7 +216,7 @@ namespace NetProbe
             return false;
         }
 
-        public void VpnSample(bool ok, DateTime t, bool sameAsDirect = false)
+        public void VpnSample(bool ok, DateTime t, bool sameAsDirect = false, bool passive = false)
         {
             if (t < tunnelAt.AddMilliseconds(500)) return; // опрос начался до перезапуска туннеля
             // первые 30 с после запуска туннеля пробник VPN, вышедший с IP «Напрямую», прошёл мимо туннеля — о VPN это ничего не говорит
@@ -227,18 +227,38 @@ namespace NetProbe
                 if (tunUpAt == DateTime.MinValue) { if (!TunIsDefaultRoute() && (DateTime.Now - tunnelAt).TotalSeconds < 10) return; tunUpAt = DateTime.Now; }
                 if (t < tunUpAt) return; // опрос начался, пока TUN ещё не был маршрутом
             }
-            if (ok) { LastVpnOk = t; if (okSince == DateTime.MinValue) okSince = t; failStreak = 0; }
+            if (ok) { LastVpnOk = t; if (okSince == DateTime.MinValue) okSince = t; failStreak = 0; if (!passive) busyLogged = false; }
             else { okSince = DateTime.MinValue; failStreak++; }
         }
 
         // пассивная проверка VLESS / VMess / Trojan туннеля (вместо опроса сайта): данные пришли через сервер = VPN работает;
         // тишина (ничего не передаётся) после успешной проверки — VPN не считается молчащим, пока активный опрос не скажет иначе
+        // Data that came back from the server is proof the tunnel works, even after failed probes: under a saturated
+        // link (a game downloading hundreds of MB) the HTTP probe times out while the tunnel is busy, not dead.
         public void VpnPassive(bool flowing, DateTime t)
         {
-            if (failStreak > 0 || LastVpnOk == DateTime.MinValue) return;
-            if (flowing) VpnSample(true, t);
-            else if (t > LastVpnOk) LastVpnOk = t;
+            if (LastVpnOk == DateTime.MinValue) return;
+            if (flowing)
+            {
+                if (failStreak > 0 && !busyLogged) { busyLogged = true; Logger.Write(LogLevel.Warn, Tx("Пробник VPN не отвечает, но данные через туннель идут — канал перегружен, остаюсь на VPN")); }
+                VpnSample(true, t, false, true);
+                return;
+            }
+            if (failStreak > 0) return;
+            if (t > LastVpnOk) LastVpnOk = t;
         }
+        bool busyLogged;
+
+        // Download rate of the physical adapter, bytes/s (from SpeedMeter). A full link delays probes beyond their timeout;
+        // while it is busy, the tunnel gets BusyFailoverSec instead of FailoverSec before it is declared down (bounded,
+        // so a really dead VPN still fails over).
+        public Func<double> LinkRxRate;
+        bool LinkBusy(Settings st)
+        {
+            var f = LinkRxRate; if (f == null || st.BusyRxKBps <= 0) return false;
+            try { return f() >= st.BusyRxKBps * 1024.0; } catch { return false; }
+        }
+        double SilentLimit(Settings st) { return LinkBusy(st) ? Math.Max(st.FailoverSec, st.BusyFailoverSec) : st.FailoverSec; }
 
         void SetState(RouteState s, string detail)
         {
@@ -539,8 +559,9 @@ namespace NetProbe
             if ((now - tunnelAt).TotalSeconds < Grace(st)) return false;
             var last = LastVpnOk > tunnelAt ? LastVpnOk : tunnelAt.AddSeconds(Grace(st) - st.FailoverSec);
             double silent = (now - last).TotalSeconds;
-            if (silent <= st.FailoverSec) return false;
-            return failStreak >= 2 || silent > st.FailoverSec + 2 * st.TimeoutSec;
+            double limit = SilentLimit(st);
+            if (silent <= limit) return false;
+            return failStreak >= 2 || silent > limit + 2 * st.TimeoutSec;
         }
 
         bool VpnStable(Settings st) { return VpnStable(st, st.RecoverSec); }
@@ -579,7 +600,7 @@ namespace NetProbe
                     if (VpnSilent(st))
                     {
                         LogTunnelState();
-                        string why = wgDied ? Tx("процесс WireSock остановился") : Tx("VPN не отвечает ") + st.FailoverSec + Tx(" с");
+                        string why = wgDied ? Tx("процесс WireSock остановился") : Tx("VPN не отвечает ") + (int)SilentLimit(st) + Tx(" с");
                         if (!OnBackup && HasBackup(st))
                         {
                             Failovers++;

@@ -118,6 +118,14 @@ namespace NetProbe
             // вторая проверка перед аварийным переключением: другие адреса через тот же пробник VPN (через туннель)
             router.ConfirmVpn = () =>
             {
+                // VLESS / VMess / Trojan: bytes coming back through the server (Clash API) = tunnel alive, link just saturated.
+                // Local and instant, so it works even when every HTTP probe would time out behind a full download queue.
+                if (router.Wg.IsXray && router.Wg.Running && st.ProbePassive)
+                {
+                    TunnelFlowState fs = TunnelFlowState.Unavailable;
+                    try { fs = TunnelFlow.Read(st.TunnelSocksPort + 1); } catch { }
+                    if (fs == TunnelFlowState.Flowing) return true;
+                }
                 var p = pVpn; if (p == null) return false;
                 string dIp = chs["direct"].Ip;
                 foreach (var u in new[] { "https://1.1.1.1/cdn-cgi/trace", "https://www.gstatic.com/generate_204" })
@@ -140,6 +148,8 @@ namespace NetProbe
             uiTimer.Tick += (s, e) => OnUiTick();
             uiTimer.Start();
             SpeedMeter.AdapterId = () => { var d = direct; return d != null ? d.Id : null; };
+            router.LinkRxRate = () => (DateTime.Now - linkRxAt).TotalSeconds < 5 ? linkRx : -1;
+            SpeedMeter.Sample += (d, u) => { linkRx = linkRx < 0 || (DateTime.Now - linkRxAt).TotalSeconds >= 5 ? d : linkRx * 0.6 + d * 0.4; linkRxAt = DateTime.Now; };
             SpeedMeter.Sample += (d, u) => { if (IsHandleCreated && !IsDisposed) try { BeginInvoke((Action)(() => OnSpeed(d, u))); } catch { } };
             if (st.SpeedOn) SpeedMeter.Start();
             NetworkChange.NetworkAddressChanged += (s, e) => { if (IsHandleCreated) try { BeginInvoke((Action)(() => RefreshAdapters(false))); } catch { } };
@@ -1096,6 +1106,7 @@ namespace NetProbe
                 if (w != null && !w.IsDisposed && w.Header != h) { w.Header = h; w.Invalidate(); }
         }
 
+        double linkRx = -1; DateTime linkRxAt = DateTime.MinValue; // smoothed ↓ of the physical adapter, bytes/s (for the router's busy-link grace)
         void OnSpeed(double d, double u)
         {
             string sd = SpeedMeter.Short(d) + "b/s", su = SpeedMeter.Short(u) + "b/s";
