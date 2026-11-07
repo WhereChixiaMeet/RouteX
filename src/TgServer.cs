@@ -26,6 +26,26 @@ namespace NetProbe
         static Timer statsTimer;
         public static bool Running { get { return listener != null; } }
         public static string LastError = "";
+
+        // who holds the port: " — tg-ws-proxy.exe (PID 1234)". Restart can only free RouteX's own socket, so the
+        // error has to say which program to close (or that the port must be changed).
+        static string PortOwner(int port)
+        {
+            try
+            {
+                var names = new List<string>();
+                int self = System.Diagnostics.Process.GetCurrentProcess().Id;
+                foreach (int pid in ProcInfo.ListenerPids(port))
+                {
+                    string n;
+                    if (pid == self) n = "RouteX";
+                    else try { using (var pr = System.Diagnostics.Process.GetProcessById(pid)) n = pr.ProcessName + ".exe"; } catch { n = "?"; }
+                    names.Add(n + " (PID " + pid + ")");
+                }
+                return names.Count > 0 ? " — " + string.Join(", ", names) : "";
+            }
+            catch { return ""; }
+        }
         public static TgConfig Config { get { return cfg; } }
 
         // ссылки для Telegram: dd (обычная) или ee (Fake TLS)
@@ -64,7 +84,7 @@ namespace NetProbe
                 }
                 catch (SocketException ex)
                 {
-                    LastError = ex.SocketErrorCode == SocketError.AddressAlreadyInUse ? Tr.Tx("порт занят другой программой") :
+                    LastError = ex.SocketErrorCode == SocketError.AddressAlreadyInUse ? Tr.Tx("порт занят другой программой") + PortOwner(c.Port) :
                                 ex.SocketErrorCode == SocketError.AccessDenied ? Tr.Tx("нет доступа к порту") :
                                 ex.SocketErrorCode == SocketError.AddressNotAvailable ? Tr.Tx("такого адреса нет на этом компьютере") : ex.Message;
                     TgLog.E("Failed to start proxy on " + c.Host + ":" + c.Port + ": " + LastError);
