@@ -8,13 +8,13 @@ Screenshots use an isolated demo profile. Connection states and measurements are
 
 | Routing | Subscriptions |
 |:---:|:---:|
-| <a href="docs/images/routex-4.0-routing.png"><img src="docs/images/routex-4.0-routing.png" alt="Routing" width="430"></a> | <a href="docs/images/routex-4.0-subscriptions.png"><img src="docs/images/routex-4.0-subscriptions.png" alt="Subscriptions" width="430"></a> |
+| <a href="docs/images/routex-5.0-routing.png"><img src="docs/images/routex-5.0-routing.png" alt="Routing" width="430"></a> | <a href="docs/images/routex-5.0-subscriptions.png"><img src="docs/images/routex-5.0-subscriptions.png" alt="Subscriptions" width="430"></a> |
 | **Monitor** | **DPI configs** |
-| <a href="docs/images/routex-4.0-monitor.png"><img src="docs/images/routex-4.0-monitor.png" alt="HTTP latency and connection monitoring" width="430"></a> | <a href="docs/images/routex-4.0-dpi.png"><img src="docs/images/routex-4.0-dpi.png" alt="DPI strategy editor" width="430"></a> |
+| <a href="docs/images/routex-5.0-monitor.png"><img src="docs/images/routex-5.0-monitor.png" alt="HTTP latency and connection monitoring" width="430"></a> | <a href="docs/images/routex-5.0-dpi.png"><img src="docs/images/routex-5.0-dpi.png" alt="DPI strategy editor" width="430"></a> |
 | **App settings** | **Appearance** |
-| <a href="docs/images/routex-4.0-app.png"><img src="docs/images/routex-4.0-app.png" alt="App startup, widgets, and settings backup" width="430"></a> | <a href="docs/images/routex-4.0-appearance.png"><img src="docs/images/routex-4.0-appearance.png" alt="Themes and custom palette" width="430"></a> |
+| <a href="docs/images/routex-5.0-app.png"><img src="docs/images/routex-5.0-app.png" alt="App startup, widgets, and settings backup" width="430"></a> | <a href="docs/images/routex-5.0-appearance.png"><img src="docs/images/routex-5.0-appearance.png" alt="Themes and custom palette" width="430"></a> |
 | **Engine** | **What's new** |
-| <a href="docs/images/routex-4.0-engine.png"><img src="docs/images/routex-4.0-engine.png" alt="Connection engines and DPI source folder" width="430"></a> | <a href="docs/images/routex-4.0-welcome.png"><img src="docs/images/routex-4.0-welcome.png" alt="Welcome to RouteX 4.0" width="430"></a> |
+| <a href="docs/images/routex-5.0-engine.png"><img src="docs/images/routex-5.0-engine.png" alt="Connection engines and DPI source folder" width="430"></a> | <a href="docs/images/routex-5.0-welcome.png"><img src="docs/images/routex-5.0-welcome.png" alt="Welcome to RouteX 5.0" width="430"></a> |
 
 ## Features
 
