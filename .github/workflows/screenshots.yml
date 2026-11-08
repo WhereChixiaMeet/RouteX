@@ -20,6 +20,13 @@ jobs:
         shell: cmd
         run: call src\build-web-preview.cmd review
 
+      - name: Screen large enough for a 1440x1000 window
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          Set-DisplayResolution -Width 1920 -Height 1200 -Force
+          Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+
       - name: Run the preview smoke test
         shell: pwsh
         run: |
