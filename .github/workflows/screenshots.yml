@@ -1,0 +1,47 @@
+# README screenshots: a push to a shots/* branch builds the UI preview (isolated demo profile, simulated values)
+# on Windows, runs its smoke test in a real WebView2 window and keeps the PNGs on the builds/shots branch.
+# Nothing is released or published.
+name: Screenshots
+
+on:
+  push:
+    branches: ['shots/**']
+
+permissions:
+  contents: write
+
+jobs:
+  shots:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the UI preview
+        shell: cmd
+        run: call src\build-web-preview.cmd review
+
+      - name: Run the preview smoke test
+        shell: pwsh
+        run: |
+          $d = Join-Path $env:RUNNER_TEMP 'preview'
+          New-Item -ItemType Directory -Force $d | Out-Null
+          Copy-Item RouteX.WebPreview.exe (Join-Path $d 'RouteX.exe')
+          Set-Content (Join-Path $d 'UI-PREVIEW.txt') 'RouteX UI preview'
+          $p = Start-Process (Join-Path $d 'RouteX.exe') -ArgumentList '--ui-preview-smoke' -WorkingDirectory $d -PassThru
+          if (-not $p.WaitForExit(300000)) { $p.Kill(); Write-Output 'Preview timed out' }
+          Get-ChildItem $d -Recurse -File | Select-Object -ExpandProperty FullName
+          Get-ChildItem $d -Filter '*error*.txt' | ForEach-Object { Write-Output "== $($_.Name)"; Get-Content $_.FullName }
+
+      - name: Keep the screenshots on the builds/shots branch
+        if: always()
+        shell: bash
+        run: |
+          d="$RUNNER_TEMP/preview"
+          mkdir out
+          cp -r "$d/screenshots" out/ 2>/dev/null || true
+          cp "$d"/*error*.txt out/ 2>/dev/null || true
+          cd out && touch .keep
+          git init -q -b builds/shots
+          git config user.name "github-actions" && git config user.email "github-actions@users.noreply.github.com"
+          git add -A && git commit -q -m "Screenshots of ${GITHUB_REF_NAME} @ ${GITHUB_SHA::7}"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" builds/shots
