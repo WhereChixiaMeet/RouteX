@@ -1,6 +1,6 @@
 // RouteX 5.0 shell: the window has no system caption any more; the interface draws its own title bar (back / forward,
 // "RouteX" in the middle, minimise / maximise / close) and fills the whole window (no frame inside the frame).
-// Also: compact settings and sidebar, Monitor-style connection info on Routing, the log in the accent color,
+// Also: compact settings and sidebar, the log in the accent color,
 // neutral grey buttons on dark themes, no "No servers found" row.
 const shellStyle=document.createElement('style');shellStyle.textContent=`
 html,body{margin:0!important;padding:0!important;height:100%;overflow:hidden}
@@ -35,15 +35,6 @@ html,body{margin:0!important;padding:0!important;height:100%;overflow:hidden}
 #routex-routing-concept .rx-window[data-page=settings] .r-panelhead{margin-bottom:4px}
 #routex-routing-concept .rx-window[data-page=settings] .r-settings-tabs{margin-bottom:0}
 
-#routex-routing-concept .rx-connection [data-route-detail=routeDetail2]{display:none}
-#routex-routing-concept .rx-connection .r-connection-details{margin-bottom:0}
-#routex-routing-concept .rx-route-vpn{margin:9px 0 var(--rx-route-gap,14px)}
-#routex-routing-concept .rx-route-vpn-main{display:flex;align-items:center;gap:9px;min-width:0}
-#routex-routing-concept .rx-route-vpn-main .rx-state-dot{flex:none}
-#routex-routing-concept .rx-route-vpn-main strong{font-size:calc(20px * var(--rx-font-scale,1));font-weight:400;line-height:1.1;color:var(--rx-text);white-space:nowrap}
-#routex-routing-concept .rx-route-vpn-main span{flex:1;font-size:calc(12px * var(--rx-font-scale,1));color:var(--rx-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-#routex-routing-concept .rx-route-vpn-main .rx-route-vpn-direct{flex:none;font-style:normal;font-size:calc(12px * var(--rx-font-scale,1));color:var(--rx-muted);white-space:nowrap}
-#routex-routing-concept .rx-route-vpn-direct b{font-weight:500;color:var(--rx-text)}
 
 #routex-routing-concept .r-log{background:color-mix(in srgb,var(--rx-accent) 5%,var(--rx-field));border-color:color-mix(in srgb,var(--rx-accent) 45%,var(--rx-line));scrollbar-color:color-mix(in srgb,var(--rx-accent) 55%,transparent) transparent}
 #routex-routing-concept .r-logrow>span:first-child{color:color-mix(in srgb,var(--rx-accent) 65%,var(--rx-muted))}
@@ -104,29 +95,12 @@ function shellTone(){
 }
 const applyThemeBeforeShell=applyTheme;applyTheme=function(...a){const result=applyThemeBeforeShell.apply(this,a);try{shellTone();}catch{}return result;};
 
-// Routing: the card stays as it was; the latency line is shown like the VPN card on the Monitor page —
-// status dot, large latency, IP / location / loss / jitter, and the Direct latency under it
-const shellLevelColor=['var(--rx-muted)','var(--rx-muted)','var(--rx-green)','#eab308','#f97316','#ef4444'];
-function shellRouteVpn(){
- const ch=(host&&host.channels)||{},v=ch.vpn||{},d=ch.direct||{},value=String(v.value??'—'),direct=String(d.value??'—');
- const extra=String(host&&host.routeDetail2||'').split(' · ').map(x=>x.trim()).filter(x=>x&&!/\d\s*ms\b/i.test(x)).join(' · ');
- const info=String(v.line1||'').split(' · ').map(x=>x.trim()).filter(x=>x&&!/^HTTP\b/i.test(x)&&!/^node\b/i.test(x)).slice(0,2).concat(String(v.line2||'').split(' · ').map(x=>x.trim()).filter(Boolean)).join(' · ');
- return `<div class="rx-route-vpn-main"><i class="rx-state-dot" style="background:${shellLevelColor[v.level|0]||'var(--rx-muted)'}"></i><strong>${esc(value)}${value==='—'?'':' '+esc(v.unit||'')}</strong><span>${esc(info)}</span><em class="rx-route-vpn-direct">Direct <b>${esc(direct)}${direct==='—'?'':' '+esc(d.unit||'')}</b>${extra?' · '+esc(extra):''}</em></div>`;
-}
-function shellRouting(){
- if(state.page!=='routing')return;
- const card=app.querySelector('.rx-connection'),details=card&&card.querySelector('.r-connection-details');if(!details)return;
- let box=card.querySelector('.rx-route-vpn');
- if(!box){box=document.createElement('div');box.className='rx-route-vpn';details.after(box);}
- box.innerHTML=shellRouteVpn();
-}
-
 // Subscriptions: an empty list stays empty, without a "No servers found" row
 function shellEmptyServers(){
  if(state.page!=='subscriptions')return;
  app.querySelectorAll('table tbody').forEach(body=>{const rows=body.rows;if(rows.length===1&&rows[0].cells.length===1&&rows[0].cells[0].colSpan>=5&&!rows[0].hasAttribute('data-server-row'))rows[0].remove();});
 }
 
-function shellAfterRender(){shellTrack();shellTitlebar();app.dataset.page=state.page||'';shellTone();shellRouting();shellEmptyServers();}
+function shellAfterRender(){shellTrack();shellTitlebar();app.dataset.page=state.page||'';shellTone();shellEmptyServers();}
 const renderBeforeShell=render;render=function(...a){const result=renderBeforeShell.apply(this,a);try{shellAfterRender();}catch(e){window.ROUTEX_UI_ERROR=String(e&&e.message||e);}return result;};
-const refreshBeforeShell=refreshMeasurements;refreshMeasurements=function(...a){const result=refreshBeforeShell.apply(this,a);try{shellTitlebar();shellRouting();}catch(e){window.ROUTEX_UI_ERROR=String(e&&e.message||e);}return result;};
+const refreshBeforeShell=refreshMeasurements;refreshMeasurements=function(...a){const result=refreshBeforeShell.apply(this,a);try{shellTitlebar();}catch(e){window.ROUTEX_UI_ERROR=String(e&&e.message||e);}return result;};
