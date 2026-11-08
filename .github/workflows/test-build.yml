@@ -1,5 +1,6 @@
 # Test builds: a push to a test/* branch builds RouteX.exe on Windows and keeps it as a workflow artifact.
-# Nothing is released or published.
+# Nothing is released or published: the exe also goes to the builds/test branch (overwritten each time)
+# so it can be fetched with plain git.
 name: Test build
 
 on:
@@ -7,7 +8,7 @@ on:
     branches: ['test/**']
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -28,3 +29,12 @@ jobs:
           name: RouteX-test
           path: RouteX.exe
           retention-days: 14
+
+      - name: Keep the exe on the builds/test branch
+        shell: bash
+        run: |
+          mkdir out && cp RouteX.exe out/ && cd out
+          git init -q -b builds/test
+          git config user.name "github-actions" && git config user.email "github-actions@users.noreply.github.com"
+          git add RouteX.exe && git commit -q -m "Test build of ${GITHUB_REF_NAME} @ ${GITHUB_SHA::7}"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" builds/test
