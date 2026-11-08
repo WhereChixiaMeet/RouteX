@@ -1,0 +1,30 @@
+# Test builds: a push to a test/* branch builds RouteX.exe on Windows and keeps it as a workflow artifact.
+# Nothing is released or published.
+name: Test build
+
+on:
+  push:
+    branches: ['test/**']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        shell: cmd
+        run: call src\build.cmd
+
+      - name: Check interface script
+        shell: bash
+        run: node -e "const s=require('fs').readFileSync('src/WebUi/interface.html','utf8');for(const m of s.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g))new Function(m[1].replace('ROUTEX_HOST_INITIAL_JSON','{}'));console.log('interface script parses')"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RouteX-test
+          path: RouteX.exe
+          retention-days: 14

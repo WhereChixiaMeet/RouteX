@@ -35,28 +35,15 @@ html,body{margin:0!important;padding:0!important;height:100%;overflow:hidden}
 #routex-routing-concept .rx-window[data-page=settings] .r-panelhead{margin-bottom:4px}
 #routex-routing-concept .rx-window[data-page=settings] .r-settings-tabs{margin-bottom:0}
 
-#routex-routing-concept .rx-connection .rx-route-top{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;align-items:start}
-#routex-routing-concept .rx-connection .rx-route-left{min-width:0}
-#routex-routing-concept .rx-connection .rx-tag,#routex-routing-concept .rx-connection .r-connection-details{display:none}
-#routex-routing-concept .rx-route-chips{display:flex;flex-wrap:nowrap;gap:5px;margin-top:9px;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 24px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 24px),transparent)}
-#routex-routing-concept .rx-chip{flex:none}
-#routex-routing-concept .rx-chip{font-size:calc(11px * var(--rx-font-scale,1));line-height:18px;color:var(--rx-muted);background:var(--rx-btn,var(--rx-soft));border:1px solid var(--rx-btn-line,var(--rx-line));border-radius:999px;padding:0 8px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
-#routex-routing-concept .rx-chip:first-child{color:var(--rx-text)}
-#routex-routing-concept .rx-route-tiles{display:grid;grid-template-columns:repeat(2,160px);gap:10px}
-#routex-routing-concept .rx-connection .rx-route-top{margin-bottom:var(--rx-route-gap,8px)}
-#routex-routing-concept .rx-tile{background:var(--rx-field);border:1px solid var(--rx-line);border-radius:8px;padding:10px 12px 11px;display:grid;gap:3px;min-width:0}
-#routex-routing-concept .rx-tile-head{display:flex;align-items:center;gap:6px;font-size:calc(11px * var(--rx-font-scale,1));color:var(--rx-muted)}
-#routex-routing-concept .rx-tile-head .rx-state-dot{width:7px;height:7px;flex:none}
-#routex-routing-concept .rx-spark{margin-left:auto;width:52px;height:16px;overflow:visible}
-#routex-routing-concept .rx-spark polyline{fill:none;stroke-width:1.4;stroke-linejoin:round;stroke-linecap:round}
-#routex-routing-concept .rx-spark.vpn polyline{stroke:var(--rx-vpn)}
-#routex-routing-concept .rx-spark.direct polyline{stroke:var(--rx-direct)}
-#routex-routing-concept .rx-tile-value{display:flex;align-items:baseline;gap:4px;line-height:1.15}
-#routex-routing-concept .rx-tile-value strong{font-size:calc(24px * var(--rx-font-scale,1));font-weight:400;color:var(--rx-text)}
-#routex-routing-concept .rx-tile-value small{font-size:calc(11px * var(--rx-font-scale,1));color:var(--rx-muted)}
-#routex-routing-concept .rx-tile-ip{font-size:calc(10.5px * var(--rx-font-scale,1));color:var(--rx-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-@container (max-width:720px){#routex-routing-concept .rx-route-tiles{grid-template-columns:repeat(2,116px);gap:8px}#routex-routing-concept .rx-tile{padding:9px 10px 10px}#routex-routing-concept .rx-spark{width:36px}}
-@container (max-width:500px){#routex-routing-concept .rx-connection .rx-route-top{grid-template-columns:1fr}#routex-routing-concept .rx-route-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+#routex-routing-concept .rx-connection [data-route-detail=routeDetail2]{display:none}
+#routex-routing-concept .rx-connection .r-connection-details{margin-bottom:0}
+#routex-routing-concept .rx-route-vpn{margin:9px 0 var(--rx-route-gap,14px)}
+#routex-routing-concept .rx-route-vpn-main{display:flex;align-items:center;gap:9px;min-width:0}
+#routex-routing-concept .rx-route-vpn-main .rx-state-dot{flex:none}
+#routex-routing-concept .rx-route-vpn-main strong{font-size:calc(20px * var(--rx-font-scale,1));font-weight:400;line-height:1.1;color:var(--rx-text);white-space:nowrap}
+#routex-routing-concept .rx-route-vpn-main span{flex:1;font-size:calc(12px * var(--rx-font-scale,1));color:var(--rx-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+#routex-routing-concept .rx-route-vpn-main .rx-route-vpn-direct{flex:none;font-style:normal;font-size:calc(12px * var(--rx-font-scale,1));color:var(--rx-muted);white-space:nowrap}
+#routex-routing-concept .rx-route-vpn-direct b{font-weight:500;color:var(--rx-text)}
 
 #routex-routing-concept .r-log{background:color-mix(in srgb,var(--rx-accent) 5%,var(--rx-field));border-color:color-mix(in srgb,var(--rx-accent) 45%,var(--rx-line));scrollbar-color:color-mix(in srgb,var(--rx-accent) 55%,transparent) transparent}
 #routex-routing-concept .r-logrow>span:first-child{color:color-mix(in srgb,var(--rx-accent) 65%,var(--rx-muted))}
@@ -117,36 +104,21 @@ function shellTone(){
 }
 const applyThemeBeforeShell=applyTheme;applyTheme=function(...a){const result=applyThemeBeforeShell.apply(this,a);try{shellTone();}catch{}return result;};
 
-// Routing: the connection info as on the Monitor page — status, chips, VPN / Direct tiles with a sparkline
+// Routing: the card stays as it was; the latency line is shown like the VPN card on the Monitor page —
+// status dot, large latency, IP / location / loss / jitter, and the Direct latency under it
 const shellLevelColor=['var(--rx-muted)','var(--rx-muted)','var(--rx-green)','#eab308','#f97316','#ef4444'];
-function shellSpark(values,cls){
- const v=(values||[]).filter(x=>Number.isFinite(x)&&x>=0).slice(-40);
- if(v.length<2)return `<svg class="rx-spark ${cls}" viewBox="0 0 64 18"></svg>`;
- const hi=Math.max(...v),lo=Math.min(...v),range=Math.max(hi-lo,20,hi*.5),min=lo-(range-(hi-lo))/2;
- return `<svg class="rx-spark ${cls}" viewBox="0 0 64 18" preserveAspectRatio="none"><polyline points="${v.map((y,i)=>`${(i*64/(v.length-1)).toFixed(1)},${(16.5-(y-min)/range*15).toFixed(1)}`).join(' ')}" vector-effect="non-scaling-stroke"/></svg>`;
-}
-function shellTile(key,label){
- const c=(host&&host.channels&&host.channels[key])||{},value=String(c.value??'—'),ip=(String(c.line1||'').match(/IP\s+([^\s·]+)/)||[])[1]||'';
- return `<div class="rx-tile"><div class="rx-tile-head"><i class="rx-state-dot" style="background:${shellLevelColor[c.level|0]||'var(--rx-muted)'}"></i><span>${label}</span>${shellSpark(host&&host.chart&&host.chart[key],key)}</div><div class="rx-tile-value"><strong>${esc(value)}</strong><small>${value==='—'?'':esc(c.unit||'')}</small></div><small class="rx-tile-ip">${ip?'IP '+esc(ip):'&nbsp;'}</small></div>`;
-}
-function shellChips(){
- const parts=String(host&&host.routeDetail||'').split(' · ').concat(String(host&&host.routeDetail2||'').split(' · ').filter(x=>!/\d\s*ms\b/i.test(x)));
- return parts.map(s=>s.trim()).filter(s=>s&&!/^winws\s*[—-]?$/i.test(s)).map(s=>`<span class="rx-chip" title="${esc(s)}">${esc(s)}</span>`).join('');
+function shellRouteVpn(){
+ const ch=(host&&host.channels)||{},v=ch.vpn||{},d=ch.direct||{},value=String(v.value??'—'),direct=String(d.value??'—');
+ const extra=String(host&&host.routeDetail2||'').split(' · ').map(x=>x.trim()).filter(x=>x&&!/\d\s*ms\b/i.test(x)).join(' · ');
+ const info=String(v.line1||'').split(' · ').map(x=>x.trim()).filter(x=>x&&!/^HTTP\b/i.test(x)&&!/^node\b/i.test(x)).slice(0,2).concat(String(v.line2||'').split(' · ').map(x=>x.trim()).filter(Boolean)).join(' · ');
+ return `<div class="rx-route-vpn-main"><i class="rx-state-dot" style="background:${shellLevelColor[v.level|0]||'var(--rx-muted)'}"></i><strong>${esc(value)}${value==='—'?'':' '+esc(v.unit||'')}</strong><span>${esc(info)}</span><em class="rx-route-vpn-direct">Direct <b>${esc(direct)}${direct==='—'?'':' '+esc(d.unit||'')}</b>${extra?' · '+esc(extra):''}</em></div>`;
 }
 function shellRouting(){
  if(state.page!=='routing')return;
- const card=app.querySelector('.rx-connection');if(!card)return;
- let top=card.querySelector(':scope>.rx-route-top');
- if(!top){
-  const stateRow=card.querySelector(':scope>.rx-state-row'),details=card.querySelector(':scope>.r-connection-details');if(!stateRow)return;
-  top=document.createElement('div');top.className='rx-route-top';
-  const left=document.createElement('div');left.className='rx-route-left';left.append(stateRow);
-  const chips=document.createElement('div');chips.className='rx-route-chips';left.append(chips);if(details)left.append(details);
-  const tiles=document.createElement('div');tiles.className='rx-route-tiles';
-  top.append(left,tiles);card.prepend(top);
- }
- top.querySelector('.rx-route-chips').innerHTML=shellChips();
- top.querySelector('.rx-route-tiles').innerHTML=shellTile('vpn','VPN')+shellTile('direct','Direct');
+ const card=app.querySelector('.rx-connection'),details=card&&card.querySelector('.r-connection-details');if(!details)return;
+ let box=card.querySelector('.rx-route-vpn');
+ if(!box){box=document.createElement('div');box.className='rx-route-vpn';details.after(box);}
+ box.innerHTML=shellRouteVpn();
 }
 
 // Subscriptions: an empty list stays empty, without a "No servers found" row
