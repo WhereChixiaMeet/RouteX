@@ -207,7 +207,7 @@ namespace NetProbe
             }else throw new ArgumentException("Unknown setting: "+key);
             if(key=="theme"||key=="accent"||key=="resetPalette"||key.StartsWith("palette.")){
                 next.Clamp();st.CopyFrom(next);st.Save();Theme.AccentColor=Theme.ParseColor(st.Accent);Theme.Apply((ThemeKind)st.Theme);
-                UpdateChars();widget?.Invalidate();widget2?.Invalidate();browser.BackColor=Theme.Bg;return null;
+                UpdateChars();widget?.Invalidate();widget2?.Invalidate();browser.BackColor=Theme.Bg;RefreshChrome();return null;
             }
             if(key=="routingRowSpacing"){next.Clamp();st.CopyFrom(next);st.Save();return null;}
             bool fonts=key.StartsWith("font"),appearance=fonts;

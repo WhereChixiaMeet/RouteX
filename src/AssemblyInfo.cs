@@ -3,5 +3,5 @@ using System.Reflection;
 [assembly: AssemblyDescription("Protocol router (WireGuard / VLESS / VMess / Trojan) + DPI bypass and network monitor")]
 [assembly: AssemblyProduct("RouteX")]
 [assembly: AssemblyCopyright("2026")]
-[assembly: AssemblyVersion("4.0.18.0")]
-[assembly: AssemblyFileVersion("4.0.18.0")]
+[assembly: AssemblyVersion("5.0.0.0")]
+[assembly: AssemblyFileVersion("5.0.0.0")]

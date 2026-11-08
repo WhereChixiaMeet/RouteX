@@ -16,7 +16,7 @@ namespace NetProbe
 {
     public partial class MainForm : Form
     {
-        public const string Version = "4.0.18";
+        public const string Version = "5.0.0";
         public static bool HadProfileAtLaunch;
         Settings st;
         readonly ChannelMonitor monVpn = new ChannelMonitor("vpn"), monDir = new ChannelMonitor("direct");
@@ -171,7 +171,7 @@ namespace NetProbe
             catch (Exception ex) { Logger.Write(LogLevel.Warn, Tx("Первичная настройка: ") + ex.Message); }
         }
 
-        protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e); Native.TitleTheme(Handle, Theme.IsDark); DwmTheme.Apply(Handle); FileDrop.Enable(Handle); }
+        protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e); Native.TitleTheme(Handle, Theme.IsDark); DwmTheme.Apply(Handle); FileDrop.Enable(Handle); RefreshChrome(); }
 
         protected override void SetVisibleCore(bool value)
         {
@@ -583,7 +583,7 @@ namespace NetProbe
             foreach (var c in old) c.Dispose();
             BuildUi();
 #if WEB_UI
-            if (WebUiShown) { if(browser.Parent!=this)Controls.Add(browser); browser.BringToFront(); side.Visible = content.Visible = false; }
+            if (WebUiShown) { if(browser.Parent!=this)Controls.Add(browser); browser.BringToFront(); side.Visible = content.Visible = false; RefreshChrome(); }
 #endif
             chart.A.AddRange(a); chart.B.AddRange(b); chart.TA.AddRange(ta); chart.TB.AddRange(tb); chart.Invalidate();
             RedrawLog();
@@ -1490,7 +1490,11 @@ namespace NetProbe
         protected override void OnResize(EventArgs e)
         {
             base.OnResize(e);
-            if (WindowState != lastWinState) { lastWinState = WindowState; if (WindowState != FormWindowState.Minimized && IsHandleCreated) BeginInvoke((Action)(() => { SaveWindowBounds(); PageFrame pf; if (frames.TryGetValue(curPage, out pf)) LayFrame(pf); })); }
+            if (WindowState != lastWinState)
+            {
+                lastWinState = WindowState; RefreshChrome();
+                if (WindowState != FormWindowState.Minimized && IsHandleCreated) BeginInvoke((Action)(() => { SaveWindowBounds(); PageFrame pf; if (frames.TryGetValue(curPage, out pf)) LayFrame(pf); if (WebUiShown && browser.Loaded) browser.UpdateSnapshot(BrowserSnapshot()); }));
+            }
 #if !UI_PREVIEW
             if (WindowState == FormWindowState.Minimized && st != null && st.MinimizeToTray && !hiddenToTray && Visible && !rebuilding)
                 BeginInvoke((Action)(() => HideToTray(false)));
@@ -1655,6 +1659,7 @@ namespace NetProbe
 
         protected override void WndProc(ref Message m)
         {
+            if (ChromeWndProc(ref m)) return;
             if (m.Msg == Program.WM_SHOWME && Program.WM_SHOWME != 0) { RestoreFromTray(); return; }
             if (m.Msg == Program.WM_QUITME && Program.WM_QUITME != 0) { ExitApp(); return; }
             if (m.Msg == FileDrop.WM_DROPFILES)

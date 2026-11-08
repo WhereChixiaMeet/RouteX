@@ -10,6 +10,7 @@ bridge=(Path(__file__).parent/'desktop.js').read_text(encoding='utf-8')
 bridge+='\n'+(Path(__file__).parent/'refinements.js').read_text(encoding='utf-8')
 bridge+='\n'+(Path(__file__).parent/'routing-controls.js').read_text(encoding='utf-8')
 bridge+='\n'+(Path(__file__).parent/'engine-layout.js').read_text(encoding='utf-8')
+bridge+='\n'+(Path(__file__).parent/'shell-v5.js').read_text(encoding='utf-8')
 assert html.count('render();\n})();')==1
 html=html.replace('render();\n})();',bridge+'\nrender();rpc("interface-ready");\n})();')
 html=html.replace('<script>(() => {','<script>window.ROUTEX_HOST_INITIAL=ROUTEX_HOST_INITIAL_JSON;</script><script>(() => {',1)

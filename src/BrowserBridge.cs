@@ -32,6 +32,7 @@ namespace NetProbe
             browser.Command += BrowserCommand;
             Controls.Add(browser);browser.BringToFront();
             side.Visible = content.Visible = false;
+            RefreshChrome();
             StartBrowserWatchdog();
             var init=browser.InitializeAsync(BrowserSnapshot());
             if(await Task.WhenAny(init,Task.Delay(BrowserInitTimeoutMs))!=init){
@@ -97,6 +98,7 @@ namespace NetProbe
             try{browserUpdates.Stop();}catch{}
             try{if(browser!=null){browser.Visible=false;Controls.Remove(browser);}}catch{}
             side.Visible=content.Visible=true;
+            RefreshChrome(); // the classic interface has no title bar of its own: give the system caption back
             try{PageFrame pf;if(frames.TryGetValue(curPage,out pf))LayFrame(pf);}catch{}
         }
         public BrowserSurface BrowserInterface { get { return browser; } }
@@ -134,7 +136,7 @@ namespace NetProbe
             // latency: a single failed probe (LatencyChart.Blip) is -1, not a gap; only a confirmed outage (NaN) breaks the line
             Func<List<double>,double?[]> latency = a=>a.Select(v=>double.IsNegativeInfinity(v)?(double?)-1:double.IsNaN(v)||double.IsInfinity(v)?(double?)null:v).ToArray();
             return new {
-                version=shownVersion,settings,uiPreview=review,paths=new {dpi=st.ZapretPath},activeConfig=router.Active?router.Wg.TunnelName:st.PrimaryTunnel,whatsNew=st.WhatsNewPending==Version&&st.WhatsNewShownFor!=Version,
+                version=shownVersion,maximized=WindowState==FormWindowState.Maximized,settings,uiPreview=review,paths=new {dpi=st.ZapretPath},activeConfig=router.Active?router.Wg.TunnelName:st.PrimaryTunnel,whatsNew=st.WhatsNewPending==Version&&st.WhatsNewShownFor!=Version,
                 fonts=browserFonts.Value,languages=Tr.Codes.Select((code,i)=>new {id=code,name=Tr.Names[i]}).ToArray(),
                 labels=Tr.Dict("en").GroupBy(p=>p.Value).ToDictionary(g=>g.Key,g=>Tr.Tx(g.First().Key)),
                 adapters=adapters.Select(a=>new {id=a.Id,name=a.Name+" · "+a.Ip}).ToArray(),artwork=BrowserArtwork(),
@@ -172,6 +174,7 @@ namespace NetProbe
                 var args=message.ContainsKey("args")?message["args"] as Dictionary<string,object>:null;args=args??new Dictionary<string,object>();
                 string action=command=="action"?BrowserString(args,"name"):"";
                 if(command=="appPicker"){BrowserAppPicker(id,args);return;}
+                if(command=="window"){BrowserWindowCommand(BrowserString(args,"op"));return;}
                 if(Array.IndexOf(DialogActions,action)>=0){
                     // A file / message dialog must not run inside the WebView2 message handler: it can open
                     // behind the window or block the browser until closed. Answer now, run it right after.

@@ -18,7 +18,7 @@ function ReadWeb([string]$name){return [IO.File]::ReadAllText((Join-Path $web $n
 $html=ReadWeb 'v5-approved.html'
 $icons=ReadWeb 'icons.js'
 $html=[regex]::new('(?s)(<script[^>]*>).*?(</script>)').Replace($html,{param($m)$m.Groups[1].Value+$icons+$m.Groups[2].Value},1)
-$bridge=(ReadWeb 'desktop.js')+"`n"+(ReadWeb 'refinements.js')+"`n"+(ReadWeb 'routing-controls.js')+"`n"+(ReadWeb 'engine-layout.js')
+$bridge=(ReadWeb 'desktop.js')+"`n"+(ReadWeb 'refinements.js')+"`n"+(ReadWeb 'routing-controls.js')+"`n"+(ReadWeb 'engine-layout.js')+"`n"+(ReadWeb 'shell-v5.js')
 $marker="render();`n})();"
 if(([regex]::Matches($html,[regex]::Escape($marker))).Count -ne 1){throw 'Interface entry point is missing or ambiguous'}
 $html=$html.Replace($marker,$bridge+"`nrender();rpc(`"interface-ready`");`n})();")
