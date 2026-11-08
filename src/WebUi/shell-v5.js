@@ -10,7 +10,7 @@ html,body{margin:0!important;padding:0!important;height:100%;overflow:hidden}
 #routex-routing-concept .rx-tb-btn{width:30px;height:24px;border:0;border-radius:5px;background:transparent;color:var(--rx-muted);display:inline-flex;align-items:center;justify-content:center;padding:0;cursor:default}
 #routex-routing-concept .rx-tb-btn:hover:not(:disabled){background:var(--rx-btn-hover,var(--rx-hover));color:var(--rx-text)}
 #routex-routing-concept .rx-tb-btn:disabled{opacity:.32}
-#routex-routing-concept .rx-tb-title{position:absolute;left:50%;top:0;height:100%;transform:translateX(-50%);display:flex;align-items:center;font-size:12px;font-weight:600;letter-spacing:.03em;color:var(--rx-text);pointer-events:none}
+#routex-routing-concept .rx-tb-title{position:absolute;left:50%;top:0;height:100%;transform:translate(-50%,1px);display:flex;align-items:center;font-size:12px;font-weight:500;letter-spacing:.04em;color:var(--rx-muted);opacity:.8;pointer-events:none}
 #routex-routing-concept .rx-tb-win{margin-left:auto;display:flex}
 #routex-routing-concept .rx-tb-ctl{width:46px;height:100%;border:0;border-radius:0;background:transparent;color:var(--rx-text);display:inline-flex;align-items:center;justify-content:center;padding:0;cursor:default}
 #routex-routing-concept .rx-tb-ctl:hover{background:var(--rx-btn-hover,var(--rx-hover))}
