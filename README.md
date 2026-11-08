@@ -38,7 +38,7 @@ Hybrid mode is in **Settings → Engine → Sources**. RU sites direct, IPv4-onl
 
 ## Install or update
 
-Download **RouteX.exe**, or fully extract **RouteX-4.0.1.zip** before starting it. Keep the existing `config`, core and theme folders when updating. The canonical application executable is RouteX.exe; data folder names and internal network identities remain compatible with earlier releases.
+Download **RouteX.exe** from the [latest release](https://github.com/WhereChixiaMeet/RouteX/releases/latest). Keep the existing `config`, core and theme folders when updating. The canonical application executable is RouteX.exe; data folder names and internal network identities remain compatible with earlier releases.
 
 Requirements: Windows 10/11, .NET Framework 4.8, Microsoft Edge WebView2 Runtime, and administrator access for TUN, WinDivert and firewall operations. Connection and DPI cores can be installed or updated from the app. A separately installed WireSock engine is required for WireGuard configs.
 
