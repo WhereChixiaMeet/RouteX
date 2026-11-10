@@ -323,6 +323,7 @@ namespace NetProbe
                     else if (Dpi.Running) RefreshExclusions(GetSettings(), false); // DPI кнопкой или для «Серверов» без VPN
                 }
                 catch (Exception ex) { Logger.Write(LogLevel.Error, Tx("Маршрутизатор: ") + ex.Message); }
+                lastLoop = DateTime.UtcNow; // a slow tick (second VPN check, tunnel restart) is not a sleep either
             }
         }
 
