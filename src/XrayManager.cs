@@ -60,7 +60,8 @@ namespace NetProbe
             sb.Exited += c => Logger.Write(LogLevel.Warn, "sing-box (TUN) " + Tx("завершился (код ") + c + ")");
             sb.Output += s => { if (s.IndexOf("ERROR", StringComparison.OrdinalIgnoreCase) >= 0 || s.IndexOf("FATAL", StringComparison.OrdinalIgnoreCase) >= 0) Logger.Write(LogLevel.Warn, "[sing-box] " + s); };
             x.Output += s => { if (s.IndexOf("failed", StringComparison.OrdinalIgnoreCase) >= 0 || s.IndexOf("error", StringComparison.OrdinalIgnoreCase) >= 0) Logger.Write(LogLevel.Poll, "[xray] " + s); };
-            new Thread(Loop) { IsBackground = true, Name = "xray" }.Start();
+            loopThread = new Thread(Loop) { IsBackground = true, Name = "xray" };
+            loopThread.Start();
         }
 
         void Post(Action a) { lock (q) q.Enqueue(a); wake.Set(); }
@@ -79,7 +80,21 @@ namespace NetProbe
         readonly CancelFlag abort = new CancelFlag();
         public void Disconnect() { abort.Cancelled = true; Post(DoDisconnect); }
         public void Reapply() { Post(() => { if (Active) { var st = GetSettings(); StartOn(ServerStore.Find(st.ActiveServer)); } }); }
-        public void ShutdownSync() { DoDisconnect(); }
+        // On the xray thread and waited for: a direct call from the UI thread could run in the middle of StartOn and leave
+        // xray, the system proxy or the TUN behind after "disconnect".
+        Thread loopThread;
+        public void ShutdownSync()
+        {
+            if (Thread.CurrentThread == loopThread) { DoDisconnect(); return; }
+            abort.Cancelled = true;
+            using (var done = new ManualResetEventSlim(false))
+            {
+                Post(() => { try { DoDisconnect(); } finally { try { done.Set(); } catch { } } });
+                bool finished = false;
+                try { finished = done.Wait(15000); } catch { }
+                if (!finished) { try { DoDisconnect(); } catch { } }
+            }
+        }
 
         public void Adopt(bool wasActive)
         {
@@ -155,11 +170,15 @@ namespace NetProbe
 
         void Loop()
         {
+            var lastLoop = DateTime.UtcNow;
             while (true)
             {
                 wake.WaitOne(1000);
+                // woke up after sleep: the network is not back yet, failed checks from before must not switch the server
+                if (Math.Abs((DateTime.UtcNow - lastLoop).TotalSeconds) > 30 && State != XState.Off && !Testing) { fails = 0; slows = 0; lastCheck = DateTime.Now.AddSeconds(10); }
                 while (true) { Action a; lock (q) { if (q.Count == 0) break; a = q.Dequeue(); } try { a(); } catch (Exception ex) { Logger.Write(LogLevel.Error, "xray: " + ex.Message); } }
                 try { if (State != XState.Off) Tick(); } catch (Exception ex) { Logger.Write(LogLevel.Error, "xray: " + ex.Message); }
+                lastLoop = DateTime.UtcNow; // long server tests are not a sleep
             }
         }
 
@@ -190,6 +209,20 @@ namespace NetProbe
         void EnsurePorts(Settings st)
         {
             if (x.Running) return; // наш xray сам держит эти порты
+            // xray.exe from the RouteX folder left by a previous run (crash, Task Manager) still holds the ports: close it
+            // instead of moving to other ports every time
+            foreach (int port in new[] { st.SocksPort, st.HttpPort, st.ApiPort })
+                foreach (int pid in ProcInfo.ListenerPids(port))
+                {
+                    try
+                    {
+                        string path = ProcInfo.ImagePath(pid);
+                        if (path == "" || XrayProcess.IsOurs(pid) || !path.StartsWith(st.XrayPath, StringComparison.OrdinalIgnoreCase) || !string.Equals(Path.GetFileName(path), "xray.exe", StringComparison.OrdinalIgnoreCase)) continue;
+                        using (var op = System.Diagnostics.Process.GetProcessById(pid)) { op.Kill(); op.WaitForExit(3000); }
+                        Logger.Write(LogLevel.Warn, "Stale xray.exe from a previous run held port " + port + " (PID " + pid + ") - closed");
+                    }
+                    catch { }
+                }
             int s0 = st.SocksPort, h0 = st.HttpPort, a0 = st.ApiPort;
             Func<int, bool> tun = p => p == st.TunnelSocksPort || p == st.TunnelSocksPort + 1; // порты xray-туннеля «Конфигов»
             while (PortBusy(st.SocksPort) || PortBusy(st.HttpPort) || st.SocksPort == st.HttpPort || tun(st.SocksPort) || tun(st.HttpPort)) { st.SocksPort += 10; st.HttpPort += 10; if (st.SocksPort > 64000) { st.SocksPort = 20808; st.HttpPort = 20809; } }
@@ -248,7 +281,16 @@ namespace NetProbe
             if (foreign != null) Logger.Write(LogLevel.Warn, Tx("Запущен другой клиент: ") + foreign + Tx(" — системный прокси и TUN могут конфликтовать, лучше закрыть его"));
             Set(XState.Connecting, s != null ? s.Name : "");
             if (StartOn(s)) { Set(XState.Connected, s.Name); SyncDpi(); }
-            else { x.Stop(); Set(XState.Off, lastErr != "" ? lastErr : Tx("Не удалось запустить")); }
+            else
+            {
+                // the previous server's system proxy and TUN would stay on a port nobody listens on: no internet while the
+                // state says "Off"
+                string why = lastErr != "" ? lastErr : Tx("Не удалось запустить");
+                x.Stop(); sb.Stop(); runningTunJson = null; statsId = null;
+                SysProxy.Clear();
+                if (dpiOn || dpiApps) { dpiOn = false; dpiApps = false; if (DpiFallback != null) DpiFallback(false); }
+                Set(XState.Off, why);
+            }
         }
 
         void DoDisconnect()
@@ -331,6 +373,13 @@ namespace NetProbe
             lastSwitch = DateTime.Now; switchTimes.Add(lastSwitch); Switches++;
             Logger.Write(LogLevel.Route, Tx("Автосвитч: ") + (cur != null ? "«" + cur.Name + "» " : "") + "(" + why + ") → «" + next.Name + "»" + (next.Delay > 0 ? " · " + next.Delay + Tx(" мс") : ""));
             if (StartOn(next)) Set(XState.Connected, next.Name);
+            else if (!abort.Cancelled)
+            {
+                // xray refused this server's config: do not pick it again at once, and say that nothing works now
+                failedAt[next.Id] = DateTime.Now;
+                lastAllDownTry = DateTime.Now;
+                Set(XState.AllDown, lastErr != "" ? lastErr : why);
+            }
         }
 
         // the server sent more than ~32 KB/s during the last stats poll (10 s): someone is using it, planned switches and

@@ -15,7 +15,19 @@ namespace NetProbe
             // standard probing then loads them from disk and no in-memory
             // Assembly.Load(byte[]) ever runs (behavioral AV heuristics treat
             // in-memory loading as dropper-like activity).
-            if (File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Microsoft.Web.WebView2.Core.dll"))) return;
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            bool core = File.Exists(Path.Combine(baseDir, "Microsoft.Web.WebView2.Core.dll")), forms = File.Exists(Path.Combine(baseDir, "Microsoft.Web.WebView2.WinForms.dll"));
+            if (core || forms)
+            {
+                // Self-update replaces only RouteX.exe. Copies written next to it by an older version must match the ones
+                // this build was compiled against, or the interface cannot load (a strong-named assembly of another
+                // version) and the app falls back to the classic look. Refresh them from the built-in copies when they
+                // differ or one is missing; nothing is written when they are already the same.
+                bool ok = true;
+                foreach (string name in new[] { "Microsoft.Web.WebView2.Core", "Microsoft.Web.WebView2.WinForms" })
+                    if (Extract("RouteX.Browser." + name + ".dll", name + ".dll", baseDir) == null) ok = false;
+                if (ok) return;
+            }
             // Standalone RouteX.exe (self-update or a bare download): put the built-in copies on disk once,
             // next to the exe when the folder is writable (the next start then needs no resolver at all),
             // and load them from that file. Assembly.Load(byte[]) is never used: in-memory loading is what

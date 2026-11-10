@@ -13,6 +13,31 @@ namespace NetProbe
 {
     public enum RouteMode { Hybrid = 0, VpnOnly = 1, DpiOnly = 2 }
 
+    // Whole-file writes through a temporary file: a crash or power loss in the middle of a write leaves the previous
+    // file intact instead of a truncated one (settings.ini, servers.json, subscriptions.json).
+    public static class SafeFile
+    {
+        public static void WriteAllText(string path, string text, Encoding enc)
+        {
+            string tmp = path + ".tmp";
+            try
+            {
+                File.WriteAllText(tmp, text, enc);
+                if (File.Exists(path))
+                {
+                    try { File.Replace(tmp, path, null); }
+                    catch { File.Copy(tmp, path, true); File.Delete(tmp); }
+                }
+                else File.Move(tmp, path);
+            }
+            catch
+            {
+                try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+                File.WriteAllText(path, text, enc);
+            }
+        }
+    }
+
     public class Settings
     {
         public int[] GetCharLayout(string key)
@@ -433,6 +458,7 @@ namespace NetProbe
             return st;
         }
 
+        static readonly object saveLock = new object(); // Save is called from the UI, router and xray threads
         public void Save()
         {
             try
@@ -448,7 +474,7 @@ namespace NetProbe
                     else s = Esc(v == null ? "" : v.ToString());
                     sb.Append(f.Name).Append('=').Append(s).Append("\r\n");
                 }
-                File.WriteAllText(FilePath, sb.ToString(), new UTF8Encoding(false));
+                lock (saveLock) SafeFile.WriteAllText(FilePath, sb.ToString(), new UTF8Encoding(false));
             }
             catch { }
         }

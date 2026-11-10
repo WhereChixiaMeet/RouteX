@@ -752,18 +752,18 @@ namespace NetProbe
             string cur = Updater.XrayVersion(st);
             if (ask && MessageBox.Show(this, (cur == "" ? Tx("Ядро xray не установлено.") : "xray " + cur + ".") + "\r\n" + Tx("Скачать последнюю версию с GitHub (XTLS/Xray-core)?"), "RouteX", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) { pendingXConnect = null; return; }
             btnCore.Enabled = false;
-            bool was = xm.Active; string id = pendingXConnect ?? st.ActiveServer; bool connect = was || pendingXConnect != null; pendingXConnect = null;
+            bool was = xm.Active; string id = pendingXConnect ?? st.ActiveServer; bool connect = was || pendingXConnect != null; pendingXConnect = null; var coreStopped = new bool[1];
             ThreadPool.QueueUserWorkItem(_ =>
             {
                 string res;
                 try
                 {
-                    if (was) xm.ShutdownSync();
-                    res = Updater.UpdateXray(st, m => { try { BeginInvoke((Action)(() => lSrvInfo.Text = m)); } catch { } });
+                    // the connection is dropped after the download, not before it (and not at all when xray is already current)
+                    res = Updater.UpdateXray(st, m => { try { BeginInvoke((Action)(() => lSrvInfo.Text = m)); } catch { } }, () => { if (was) { coreStopped[0] = true; xm.ShutdownSync(); } });
                 }
                 catch (Exception ex) { res = Tx("Ошибка обновления: ") + ex.Message; }
                 Logger.Write(LogLevel.Info, res);
-                try { BeginInvoke((Action)(() => { btnCore.Enabled = true; lSrvInfo.Text = res; UpdateCoreLabel(); CheckUpdates(true); if (connect && File.Exists(XrayProcess.Exe(st))) { StartMonitoringIfProxy(); xm.Connect(id); } })); } catch { }
+                try { BeginInvoke((Action)(() => { btnCore.Enabled = true; lSrvInfo.Text = res; UpdateCoreLabel(); CheckUpdates(true); if (connect && (coreStopped[0] || !was) && File.Exists(XrayProcess.Exe(st))) { StartMonitoringIfProxy(); xm.Connect(id); } })); } catch { }
             });
         }
 
@@ -783,11 +783,11 @@ namespace NetProbe
             {
                 var res = new List<string>();
                 Action<string> status = m => { try { BeginInvoke((Action)(() => lSrvInfo.Text = m)); } catch { } };
-                try { if (was) xm.ShutdownSync(); } catch { }
-                if (ux) try { res.Add(Updater.UpdateXray(st, status)); } catch (Exception ex) { res.Add("xray: " + ex.Message); }
-                if (us) try { res.Add(Updater.UpdateSingBox(st, status)); } catch (Exception ex) { res.Add("sing-box: " + ex.Message); }
+                var bothStopped = new bool[1]; Action stopOnce = () => { if (was && !bothStopped[0]) { bothStopped[0] = true; try { xm.ShutdownSync(); } catch { } } };
+                if (ux) try { res.Add(Updater.UpdateXray(st, status, stopOnce)); } catch (Exception ex) { res.Add("xray: " + ex.Message); }
+                if (us) try { res.Add(Updater.UpdateSingBox(st, status, stopOnce)); } catch (Exception ex) { res.Add("sing-box: " + ex.Message); }
                 foreach (var r in res) Logger.Write(LogLevel.Info, r);
-                try { BeginInvoke((Action)(() => { btnCoresUpd.Enabled = true; lSrvInfo.Text = string.Join(" · ", res); CheckUpdates(true); if (was && File.Exists(XrayProcess.Exe(st))) { StartMonitoringIfProxy(); xm.Connect(id); } })); } catch { }
+                try { BeginInvoke((Action)(() => { btnCoresUpd.Enabled = true; lSrvInfo.Text = string.Join(" · ", res); CheckUpdates(true); if (was && bothStopped[0] && File.Exists(XrayProcess.Exe(st))) { StartMonitoringIfProxy(); xm.Connect(id); } })); } catch { }
             });
         }
 
@@ -795,15 +795,15 @@ namespace NetProbe
         {
             string cur = Updater.SingBoxVersion(st);
             if (ask && MessageBox.Show(this, (cur == "" ? Tx("Ядро TUN (sing-box) не установлено.") : "sing-box " + cur + ".") + "\r\n" + Tx("Скачать последнюю версию с GitHub (SagerNet/sing-box)?"), "RouteX", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
-            btnSb.Enabled = false;
+            btnSb.Enabled = false; var sbStopped = new bool[1];
             bool was = xm.Active; string id = st.ActiveServer;
             ThreadPool.QueueUserWorkItem(_ =>
             {
                 string res;
-                try { if (was) xm.ShutdownSync(); res = Updater.UpdateSingBox(st, m => { try { BeginInvoke((Action)(() => lSrvInfo.Text = m)); } catch { } }); }
+                try { res = Updater.UpdateSingBox(st, m => { try { BeginInvoke((Action)(() => lSrvInfo.Text = m)); } catch { } }, () => { if (was) { sbStopped[0] = true; xm.ShutdownSync(); } }); }
                 catch (Exception ex) { res = Tx("Ошибка обновления: ") + ex.Message; }
                 Logger.Write(LogLevel.Info, res);
-                try { BeginInvoke((Action)(() => { btnSb.Enabled = true; lSrvInfo.Text = res; UpdateCoreLabel(); if (was) xm.Connect(id); })); } catch { }
+                try { BeginInvoke((Action)(() => { btnSb.Enabled = true; lSrvInfo.Text = res; UpdateCoreLabel(); if (was && sbStopped[0]) xm.Connect(id); })); } catch { }
             });
         }
 

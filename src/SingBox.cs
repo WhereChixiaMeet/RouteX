@@ -173,6 +173,29 @@ namespace NetProbe
         public bool Running { get { try { return p != null && !p.HasExited; } catch { return false; } } }
         public static string Exe(Settings st) { return Path.Combine(st.SingBoxPath, "sing-box.exe"); }
 
+        // sing-box processes started or adopted by this run. One from the RouteX folder that is not here was left by a
+        // previous run (crash, Task Manager): it still owns the "NetProbe TUN" adapter and sends the traffic to a dead port.
+        static readonly HashSet<int> live = new HashSet<int>();
+        static void Track(Process pr) { try { lock (live) live.Add(pr.Id); } catch { } }
+        static void Untrack(Process pr) { try { lock (live) live.Remove(pr.Id); } catch { } }
+        static void KillStale(Settings st)
+        {
+            try
+            {
+                string dir = Path.GetFullPath(st.SingBoxPath).TrimEnd('\\') + "\\";
+                foreach (var op in Process.GetProcessesByName("sing-box"))
+                    using (op)
+                    {
+                        bool ours; lock (live) ours = live.Contains(op.Id);
+                        if (ours) continue;
+                        string path = ""; try { path = ProcInfo.ImagePath(op.Id); } catch { }
+                        if (path == "" || !path.StartsWith(dir, StringComparison.OrdinalIgnoreCase)) continue;
+                        try { op.Kill(); op.WaitForExit(4000); Logger.Write(LogLevel.Warn, "Stale sing-box.exe from a previous run (PID " + op.Id + ") closed"); } catch { }
+                    }
+            }
+            catch { }
+        }
+
         public string Start(Settings st, string json, string cfgName = "singbox.json")
         {
             Stop();
@@ -183,16 +206,18 @@ namespace NetProbe
             var check = Proc.Run(exe, "check -c \"" + cfg + "\" -D \"" + st.SingBoxPath + "\"", 10000);
             if (check.Exit != 0 || check.TimedOut || check.StartError != null)
                 return "sing-box config check failed: " + (check.StartError ?? (check.TimedOut ? "timeout" : check.Err.Trim()));
+            KillStale(st);
             var psi = new ProcessStartInfo(exe, "run -c \"" + cfg + "\" -D \"" + st.SingBoxPath + "\"") { UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = st.SingBoxPath };
             try
             {
                 var pr = new Process { StartInfo = psi, EnableRaisingEvents = true };
                 pr.OutputDataReceived += (s, e) => { if (!string.IsNullOrWhiteSpace(e.Data)) { var h = Output; if (h != null) h(e.Data.Trim()); } };
                 pr.ErrorDataReceived += (s, e) => { if (!string.IsNullOrWhiteSpace(e.Data)) { var h = Output; if (h != null) h(e.Data.Trim()); } };
-                pr.Exited += (s, e) => { int c = -1; try { c = pr.ExitCode; } catch { } if (pr == p) { var h = Exited; if (h != null) h(c); } };
+                pr.Exited += (s, e) => { Untrack(pr); int c = -1; try { c = pr.ExitCode; } catch { } if (pr == p) { var h = Exited; if (h != null) h(c); } };
                 pr.Start();
+                Track(pr);
                 p = pr;
-                if (pr.WaitForExit(600)) { int code = pr.ExitCode; p = null; pr.Dispose(); return "sing-box stopped during startup (" + code + "). Check the sing-box log."; }
+                if (pr.WaitForExit(600)) { int code = pr.ExitCode; p = null; Untrack(pr); pr.Dispose(); return "sing-box stopped during startup (" + code + "). Check the sing-box log."; }
                 return null;
             }
             catch (Exception ex) { return "sing-box: " + ex.Message; }
@@ -201,7 +226,8 @@ namespace NetProbe
         public void Attach(Process pr)
         {
             pr.EnableRaisingEvents = true;
-            pr.Exited += (s, e) => { int c = -1; try { c = pr.ExitCode; } catch { } if (pr == p) { var h = Exited; if (h != null) h(c); } };
+            Track(pr);
+            pr.Exited += (s, e) => { Untrack(pr); int c = -1; try { c = pr.ExitCode; } catch { } if (pr == p) { var h = Exited; if (h != null) h(c); } };
             p = pr;
         }
 
@@ -210,6 +236,7 @@ namespace NetProbe
             var pr = p; p = null;
             if (pr == null) return;
             try { if (!pr.HasExited) { pr.Kill(); pr.WaitForExit(4000); } } catch { }
+            Untrack(pr);
             try { pr.Dispose(); } catch { }
         }
     }

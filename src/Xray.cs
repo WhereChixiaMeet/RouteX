@@ -258,7 +258,9 @@ namespace NetProbe
                 {
                     if (File.Exists(SrvFile))
                         foreach (var d in Js().Deserialize<List<Dictionary<string, object>>>(File.ReadAllText(SrvFile, Encoding.UTF8)))
+                        try
                         {
+                            if (d == null || !d.ContainsKey("link")) continue;
                             var e = ServerEntry.Parse(Convert.ToString(d["link"]));
                             if (e == null) continue;
                             if (d.ContainsKey("id") && Convert.ToString(d["id"]) != "") e.Id = Convert.ToString(d["id"]); // 3.0.1: id хранится (дубли в разных подписках)
@@ -273,13 +275,29 @@ namespace NetProbe
                             if (d.ContainsKey("up")) e.TotalUp = Convert.ToInt64(d["up"]);
                             Servers.Add(e);
                         }
+                        catch (Exception one) { Logger.Write(LogLevel.Warn, "servers.json: one entry skipped - " + one.Message); } // one bad entry no longer drops the whole list
+                }
+                catch (Exception ex) { Logger.Write(LogLevel.Error, "servers.json: " + ex.Message); KeepUnreadable(SrvFile); }
+                // subscriptions are read on their own: a damaged servers.json must not take them away too
+                try
+                {
                     if (File.Exists(SubFile))
                         foreach (var d in Js().Deserialize<List<Dictionary<string, object>>>(File.ReadAllText(SubFile, Encoding.UTF8)))
+                        try
+                        {
                             Subs.Add(new Subscription { Id = Convert.ToString(d["id"]), Name = Convert.ToString(d["name"]), Url = Convert.ToString(d["url"]), Enabled = Convert.ToBoolean(d["enabled"]), Updated = new DateTime(Convert.ToInt64(d["updated"])),
                                 UA = d.ContainsKey("ua") ? Convert.ToString(d["ua"]) : "", LastReport = d.ContainsKey("report") ? Convert.ToString(d["report"]) : "" });
+                        }
+                        catch (Exception one) { Logger.Write(LogLevel.Warn, "subscriptions.json: one entry skipped - " + one.Message); }
                 }
-                catch (Exception ex) { Logger.Write(LogLevel.Error, "servers.json: " + ex.Message); }
+                catch (Exception ex) { Logger.Write(LogLevel.Error, "subscriptions.json: " + ex.Message); KeepUnreadable(SubFile); }
             }
+        }
+
+        // The file could not be read at all: the next Save would overwrite it with an empty list. Keep a copy first.
+        static void KeepUnreadable(string file)
+        {
+            try { if (File.Exists(file)) File.Copy(file, file + ".unreadable", true); } catch { }
         }
 
         public static void Save()
@@ -288,8 +306,8 @@ namespace NetProbe
             {
                 try
                 {
-                    File.WriteAllText(SrvFile, Js().Serialize(Servers.Select(s => s.ToDict()).ToList()), new UTF8Encoding(false));
-                    File.WriteAllText(SubFile, Js().Serialize(Subs.Select(s => new Dictionary<string, object> { { "id", s.Id }, { "name", s.Name }, { "url", s.Url }, { "enabled", s.Enabled }, { "updated", s.Updated.Ticks }, { "ua", s.UA }, { "report", s.LastReport } }).ToList()), new UTF8Encoding(false));
+                    SafeFile.WriteAllText(SrvFile, Js().Serialize(Servers.Select(s => s.ToDict()).ToList()), new UTF8Encoding(false));
+                    SafeFile.WriteAllText(SubFile, Js().Serialize(Subs.Select(s => new Dictionary<string, object> { { "id", s.Id }, { "name", s.Name }, { "url", s.Url }, { "enabled", s.Enabled }, { "updated", s.Updated.Ticks }, { "ua", s.UA }, { "report", s.LastReport } }).ToList()), new UTF8Encoding(false));
                 }
                 catch (Exception ex) { Logger.Write(LogLevel.Error, "servers.json: " + ex.Message); }
             }
@@ -326,8 +344,21 @@ namespace NetProbe
 
         public static string Download(string url, int timeoutMs, string userAgent = null)
         {
+            try { return Fetch(url, timeoutMs, userAgent, false); }
+            catch (WebException)
+            {
+                // The request went through the Windows system proxy, and that proxy is our own xray. When every server is
+                // dead, the subscription that would bring new servers could not be updated. Try once more without a proxy.
+                if (!SysProxy.IsOurs()) throw;
+                return Fetch(url, timeoutMs, userAgent, true);
+            }
+        }
+
+        static string Fetch(string url, int timeoutMs, string userAgent, bool direct)
+        {
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | (SecurityProtocolType)12288;
             var rq = (HttpWebRequest)WebRequest.Create(url);
+            if (direct) rq.Proxy = null;
             rq.UserAgent = string.IsNullOrEmpty(userAgent) ? Subscription.Clients[0][1] : userAgent; rq.Timeout = timeoutMs; rq.ReadWriteTimeout = timeoutMs;
             rq.Accept = "*/*";
             rq.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
@@ -336,6 +367,13 @@ namespace NetProbe
 
         // Обновить подписку: серверы группы заменяются, избранное и замеры сохраняются.
         // Итог честный: сколько серверов и что пропущено (протоколы, которые xray не запускает, зашифрованные ссылки, ошибки).
+        // What a server is, without its display name: providers put the remaining traffic or the expiry date into the
+        // name, and the whole link (the id is its hash) changed with it on every update.
+        static string Identity(ServerEntry e)
+        {
+            return string.Join("|", new[] { e.Protocol, e.Address, e.Port.ToString(), e.UserId, e.Network, e.Security, e.Path, e.Host, e.Sni, e.ServiceName, e.Flow }).ToLowerInvariant();
+        }
+
         public static string UpdateSub(Subscription s)
         {
             try
@@ -350,10 +388,15 @@ namespace NetProbe
                 lock (lk)
                 {
                     var old = Servers.Where(x => x.Group == s.Id).GroupBy(x => x.Link).ToDictionary(g => g.Key, g => g.First());
+                    var newLinks = new HashSet<string>(res.Servers.Select(x => x.Link));
+                    // renamed servers: same address / port / user, another name; each old entry is given away once
+                    var renamed = Servers.Where(x => x.Group == s.Id && !newLinks.Contains(x.Link)).GroupBy(Identity).ToDictionary(g => g.Key, g => new Queue<ServerEntry>(g));
                     Servers.RemoveAll(x => x.Group == s.Id);
                     foreach (var e in res.Servers)
                     {
                         ServerEntry o; e.Group = s.Id;
+                        Queue<ServerEntry> same;
+                        if (!old.TryGetValue(e.Link, out o) && renamed.TryGetValue(Identity(e), out same) && same.Count > 0) { o = same.Dequeue(); old[e.Link] = o; }
                         if (old.TryGetValue(e.Link, out o)) { e.Id = o.Id; e.Favorite = o.Favorite; e.Delay = o.Delay; e.Tested = o.Tested; e.Speed = o.Speed; e.TotalDown = o.TotalDown; e.TotalUp = o.TotalUp; if (e.Country == "") e.Country = o.Country; }
                         else UniqueId(e, s.Id);
                         Servers.Add(e);

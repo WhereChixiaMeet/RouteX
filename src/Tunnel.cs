@@ -238,8 +238,10 @@ namespace NetProbe
                     bool mine; lock (lk) mine = proc == p;
                     if (mine) { var h = Exited; if (h != null) try { h(code); } catch { } }
                 };
-                p.Start();
+                // assigned before Start: a process that exits at once must still be recognised as ours in Exited
                 lock (lk) { proc = p; TunnelName = tunnel; StartedAt = DateTime.Now; LastHandshake = DateTime.MinValue; }
+                try { p.Start(); }
+                catch { lock (lk) { if (proc == p) proc = null; } throw; }
                 return null;
             }
             catch (Exception ex) { return Tx("Не удалось запустить WireSock: ") + ex.Message; }

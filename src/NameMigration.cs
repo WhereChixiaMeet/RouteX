@@ -232,6 +232,30 @@ namespace NetProbe
             }
             finally { if (child != null) child.Dispose(); try { if (File.Exists(temporary)) File.Delete(temporary); } catch { } }
         }
+        // Every update leaves its staging folder behind (two copies of the exe, the previous exe, a copy of config):
+        // useful for a rollback right after the update, dead weight a few days later. Unfinished downloads too.
+        public static void CleanupLeftovers()
+        {
+            try
+            {
+                string runtime = Path.Combine(Settings.Root, "config", "runtime");
+                string keep = pending != null ? Folder(pending) : null;
+                string staging = Path.Combine(runtime, "name-migration");
+                if (Directory.Exists(staging))
+                    foreach (string dir in Directory.GetDirectories(staging))
+                        try
+                        {
+                            if (keep != null && Same(dir, keep)) continue;
+                            if ((DateTime.UtcNow - Directory.GetCreationTimeUtc(dir)).TotalDays < 3) continue;
+                            Directory.Delete(dir, true);
+                        }
+                        catch { }
+                if (Directory.Exists(runtime))
+                    foreach (string dir in Directory.GetDirectories(runtime, "download-*"))
+                        try { if ((DateTime.UtcNow - Directory.GetCreationTimeUtc(dir)).TotalDays >= 1) Directory.Delete(dir, true); } catch { }
+            }
+            catch { }
+        }
         public static bool HasLegacyInstance()
         {
             string root = LaunchRoot ?? Path.GetDirectoryName(Application.ExecutablePath);

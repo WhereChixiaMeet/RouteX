@@ -28,7 +28,9 @@ namespace NetProbe
                 { "dpi", Files(Settings.Sub("dpi"), "*.txt") },
                 { "servers", File.Exists(Path.Combine(Settings.Dir, "servers.json")) ? File.ReadAllText(Path.Combine(Settings.Dir, "servers.json"), Encoding.UTF8) : "" },
                 { "subscriptions", File.Exists(Path.Combine(Settings.Dir, "subscriptions.json")) ? File.ReadAllText(Path.Combine(Settings.Dir, "subscriptions.json"), Encoding.UTF8) : "" },
-                { "characters", CharacterFiles() }
+                { "characters", CharacterFiles() },
+                // 5.0.3: the user's own DPI lists live in the zapret folder, not in config\lists, and were not in the backup
+                { "zapretUser", string.IsNullOrEmpty(AppLists.ZapretLists) ? new Dictionary<string, object>() : Files(AppLists.ZapretLists, "*-user.txt") }
             };
             return new JavaScriptSerializer { MaxJsonLength = int.MaxValue }.Serialize(root);
         }
@@ -87,6 +89,17 @@ namespace NetProbe
             if (root.ContainsKey("lists")) WriteFiles(root["lists"], Settings.Sub("lists"));
             if (root.ContainsKey("tunnels")) WriteFiles(root["tunnels"], Settings.Sub("tunnels"));
             if (root.ContainsKey("dpi")) WriteFiles(root["dpi"], Settings.Sub("dpi"));
+            if (root.ContainsKey("zapretUser") && !string.IsNullOrEmpty(AppLists.ZapretLists))
+            {
+                var user = root["zapretUser"] as Dictionary<string, object>;
+                if (user != null)
+                    try
+                    {
+                        Directory.CreateDirectory(AppLists.ZapretLists);
+                        WriteFiles(user.Where(kv => Path.GetFileName(kv.Key).EndsWith("-user.txt", StringComparison.OrdinalIgnoreCase)).ToDictionary(kv => kv.Key, kv => kv.Value), AppLists.ZapretLists);
+                    }
+                    catch { }
+            }
             if (s("servers") != "") File.WriteAllText(Path.Combine(Settings.Dir, "servers.json"), s("servers"), new UTF8Encoding(false));
             if (s("subscriptions") != "") File.WriteAllText(Path.Combine(Settings.Dir, "subscriptions.json"), s("subscriptions"), new UTF8Encoding(false));
             if (characters != null) foreach (var file in characters) {

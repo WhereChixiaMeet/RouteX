@@ -151,8 +151,11 @@ namespace NetProbe
             SpeedMeter.AdapterId = () => { var d = direct; return d != null ? d.Id : null; };
             router.LinkRxRate = () => (DateTime.Now - linkRxAt).TotalSeconds < 5 ? linkRx : -1;
             SpeedMeter.Sample += (d, u) => { linkRx = linkRx < 0 || (DateTime.Now - linkRxAt).TotalSeconds >= 5 ? d : linkRx * 0.6 + d * 0.4; linkRxAt = DateTime.Now; };
-            SpeedMeter.Sample += (d, u) => { if (IsHandleCreated && !IsDisposed) try { BeginInvoke((Action)(() => OnSpeed(d, u))); } catch { } };
-            if (st.SpeedOn) SpeedMeter.Start();
+            SpeedMeter.Sample += (d, u) => { if (st.SpeedOn && IsHandleCreated && !IsDisposed) try { BeginInvoke((Action)(() => OnSpeed(d, u))); } catch { } };
+            // Always running: the router needs the link rate ("the link is busy, do not fail over", "the tunnel is in use,
+            // postpone the restart"). With the speed monitor switched off in Settings both protections silently stopped.
+            // The counters are only read once a second; nothing is sent. "Speed monitor" now only hides the numbers.
+            SpeedMeter.Start();
             NetworkChange.NetworkAddressChanged += (s, e) => { if (IsHandleCreated) try { BeginInvoke((Action)(() => RefreshAdapters(false))); } catch { } };
         }
 
@@ -430,7 +433,7 @@ namespace NetProbe
             if (started) return;
             started = true;
             Logger.Write(LogLevel.Info, "RouteX " + Version + Tx(" запущен. Папка: ") + Settings.Root + Tx(" · лог: ") + st.LogPath);
-            ThreadPool.QueueUserWorkItem(_ => { CheckCurl(); Logger.Prune(); });
+            ThreadPool.QueueUserWorkItem(_ => { CheckCurl(); Logger.Prune(); NameMigration.CleanupLeftovers(); });
             if (st.AutoStartMonitor) StartMonitoring(false); // мониторинг — как был при выходе (Start/Stop запоминаются)
             else SyncBgProbe(); // выключен — опросы только для лога (если включено)
             if (autorunApplied == null) { autorunApplied = st.Autorun; if (st.Autorun && !NameMigration.Pending && !NameMigration.LegacyFallback) ThreadPool.QueueUserWorkItem(_ => SetAutorun(true)); }
@@ -1456,7 +1459,7 @@ namespace NetProbe
         {
             ApplyWidgetVisibility();
             if (miniMon != null && !miniMon.IsDisposed) { miniMon.SetParts(st.SidePing && MonOn, st.SideSpeedOn); if (laySide != null) laySide(); }
-            if (st.SpeedOn) SpeedMeter.Start(); else SpeedMeter.Stop();
+            SpeedMeter.Start(); // see the constructor: the router needs the rate even when the speed monitor is hidden
             if (!MonOn) SyncBgProbe();
             if (layMonitor != null) layMonitor();
         }

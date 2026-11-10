@@ -84,20 +84,24 @@ namespace NetProbe
 
         public ChannelMonitor(string key) { Key = key; }
 
+        // Stop + Start in a row (monitoring off -> background probe on) used to leave the old thread alive next to the
+        // new one: it saw "running" again. Every Start has its own number; a thread of an older Start exits.
+        int generation;
         public void Start()
         {
             if (running) return;
+            int mine = Interlocked.Increment(ref generation);
             running = true;
-            th = new Thread(Loop) { IsBackground = true, Name = "monitor-" + Key };
+            th = new Thread(() => Loop(mine)) { IsBackground = true, Name = "monitor-" + Key };
             th.Start();
         }
 
         public void Stop() { running = false; wake.Set(); }
         public void Kick() { wake.Set(); }
 
-        void Loop()
+        void Loop(int mine)
         {
-            while (running)
+            while (running && mine == Volatile.Read(ref generation))
             {
                 var st = GetSettings();
                 double rate = Math.Max(Settings.MinPollRate, Math.Min(st.MaxPollRate, Key == "direct" ? st.DirectPollRate : st.PollRate));
@@ -137,7 +141,7 @@ namespace NetProbe
                 catch (Exception ex) { r = new ProbeResult { Error = ex.Message }; }
                 if(r==null)r=new ProbeResult{Error="Probe returned no result"};
                 r.TargetUrl=url;endpoints.Report(url,r.Ok,requestClock.Elapsed.TotalSeconds);
-                if (!running) break;
+                if (!running || mine != Volatile.Read(ref generation)) break;
                 if (Paused) continue; // результат во время теста скорости не учитываем
                 Stats.Add(r);
                 ConsecutiveFails = r.Ok ? 0 : ConsecutiveFails + 1;

@@ -268,8 +268,10 @@ namespace NetProbe
                     bool mine; lock (lk) mine = proc == p;
                     if (mine) { var h = Exited; if (h != null) try { h(code); } catch { } }
                 };
-                p.Start();
+                // assigned before Start: winws that exits at once (bad strategy arguments) must still raise Exited
                 lock (lk) { proc = p; Strategy = strategy; StartedAt = DateTime.Now; }
+                try { p.Start(); }
+                catch { lock (lk) { if (proc == p) proc = null; } throw; }
                 return null;
             }
             catch (Exception ex) { return Tx("Не удалось запустить winws.exe: ") + ex.Message; }

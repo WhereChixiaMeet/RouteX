@@ -89,7 +89,19 @@ namespace NetProbe
         Timer reapplyTimer;
         public void Reapply() { lock (q) { if (reapplyTimer == null) reapplyTimer = new Timer(_ => Post(DoReapply)); reapplyTimer.Change(2000, Timeout.Infinite); } }
         public void RestartDpi() { Post(() => { if (Dpi.Running) StartDpi(); }); }
-        public void ShutdownSync() { DoDisconnect(); }
+        // Runs on the router thread (so it cannot race with a Tick that is starting a tunnel or adding kill switch
+        // rules) and waits for it; falls back to a direct call only if the router thread is stuck.
+        public void ShutdownSync()
+        {
+            if (Thread.CurrentThread == th) { DoDisconnect(); return; }
+            using (var done = new ManualResetEventSlim(false))
+            {
+                Post(() => { try { DoDisconnect(); } finally { try { done.Set(); } catch { } } });
+                bool finished = false;
+                try { finished = done.Wait(15000); } catch { }
+                if (!finished) { try { DoDisconnect(); } catch { } }
+            }
+        }
         // DPI без маршрутизатора (запасной вариант автосвитча серверов)
         // DPI отдельной кнопкой: работает параллельно с VPN и не выключается вместе с ним
         public volatile bool ManualDpi;
@@ -286,14 +298,25 @@ namespace NetProbe
 
         void Loop()
         {
+            var lastLoop = DateTime.UtcNow;
             while (true)
             {
                 wake.WaitOne(1000);
+                // The thread did not run for a long time: the PC was asleep (or frozen). The network needs a few seconds
+                // after waking up, so the old "last answer" must not count as VPN silence right away.
+                var loopNow = DateTime.UtcNow;
+                if (Math.Abs((loopNow - lastLoop).TotalSeconds) > 30 && State != RouteState.Off)
+                {
+                    quietFrom = DateTime.Now.AddSeconds(10); failStreak = 0;
+                    Logger.Write(LogLevel.Info, "Resume after sleep or a long pause: VPN check restarts its countdown");
+                }
+                lastLoop = loopNow;
                 while (true)
                 {
                     Action a; lock (q) { if (q.Count == 0) break; a = q.Dequeue(); }
                     try { a(); } catch (Exception ex) { Logger.Write(LogLevel.Error, Tx("Маршрутизатор: ") + ex.Message); }
                 }
+                lastLoop = DateTime.UtcNow; // a long command (stopping a service, a dialog) is not a sleep
                 try
                 {
                     if (State != RouteState.Off) Tick();
@@ -377,6 +400,17 @@ namespace NetProbe
                 if (!ok) { Logger.Write(LogLevel.Error, Tx("Служба WireSock запущена — туннель RouteX не стартовал")); return false; }
                 Logger.Write(LogLevel.Info, Tx("Останавливаю службу wiresock-client-service…"));
                 WiresockRunner.StopService();
+            }
+            // wiresock-client survives RouteX on purpose (self-update). After a crash or Task Manager the old process is
+            // still tunnelling with the old rules, and WireSock is single-instance: the new tunnel would never start.
+            foreach (int stale in WiresockRunner.OtherInstances(Wg.IsXray ? 0 : Wg.Pid))
+            {
+                try
+                {
+                    using (var op = System.Diagnostics.Process.GetProcessById(stale)) { op.Kill(); op.WaitForExit(3000); }
+                    Logger.Write(LogLevel.Warn, "Stale wiresock-client.exe from a previous run (PID " + stale + ") closed");
+                }
+                catch { }
             }
             wgDied = false;
             okSince = DateTime.MinValue; tunnelAt = DateTime.Now; LastVpnOk = DateTime.MinValue;
@@ -570,12 +604,14 @@ namespace NetProbe
         // VPN «молчит»? Не дольше порога — нет. Дольше — только если две проверки подряд не удались
         // или пробник завис так, что не вернул даже ошибку (FailoverSec + 2 таймаута без единого ответа)
         volatile int failStreak;
+        DateTime quietFrom = DateTime.MinValue; // after waking up: silence is counted from here
         bool VpnSilent(Settings st)
         {
             if (wgDied || !Wg.Running) return true;
             var now = DateTime.Now;
             if ((now - tunnelAt).TotalSeconds < Grace(st)) return false;
             var last = LastVpnOk > tunnelAt ? LastVpnOk : tunnelAt.AddSeconds(Grace(st) - st.FailoverSec);
+            if (quietFrom > last) last = quietFrom;
             double silent = (now - last).TotalSeconds;
             double limit = SilentLimit(st);
             if (silent <= limit) return false;
@@ -627,10 +663,15 @@ namespace NetProbe
                         }
                         if (st.RunMode == RouteMode.Hybrid) { EnterDpi(st, why); return; }
                         Failovers++;
-                        Logger.Write(LogLevel.Route, Tx("VPN недоступен: ") + why + (st.KillSwitch ? Tx(" · kill switch для «строго VPN»") : ""));
+                        // The tunnel process is alive: it still captures the apps, nothing can leak past it. Blocking the
+                        // apps in the firewall here turned a short probe failure (busy link, a lost packet burst) into a
+                        // real disconnect of every game and call. The kill switch waits until the tunnel is actually
+                        // restarted (30 s of silence) or the process is gone.
+                        bool tunnelGone = wgDied || !Wg.Running;
+                        Logger.Write(LogLevel.Route, Tx("VPN недоступен: ") + why + (st.KillSwitch && tunnelGone ? Tx(" · kill switch для «строго VPN»") : ""));
                         lastCycle = wgDied ? now.AddSeconds(-30) : now; // the process crashed: restart on the next tick, not in 30 s
                         SetState(RouteState.VpnDown, why);
-                        Kill(st, true);
+                        if (tunnelGone) Kill(st, true);
                         return;
                     }
                     if (State == RouteState.Backup && st.RetryPrimaryMin > 0 && (now - backupSince).TotalMinutes >= st.RetryPrimaryMin && Tunnels.Exists(st.PrimaryTunnel)
@@ -643,7 +684,8 @@ namespace NetProbe
                     break;
 
                 case RouteState.DpiFailover:
-                    if (dpiDied && dpiRestarts < 5) { dpiRestarts++; Logger.Write(LogLevel.Warn, Tx("Перезапуск winws (") + dpiRestarts + ")"); StartDpi(); }
+                    if (Dpi.Running && dpiRestarts > 0 && (now - Dpi.StartedAt).TotalMinutes >= 3) dpiRestarts = 0;
+                    if ((dpiDied || !Dpi.Running) && dpiRestarts < 5) { dpiRestarts++; Logger.Write(LogLevel.Warn, Tx("Перезапуск winws (") + dpiRestarts + ")"); StartDpi(); }
                     RefreshExclusions(st, false);
                     if (VpnStable(st, RecoverNeed(st)))
                     {
@@ -677,8 +719,9 @@ namespace NetProbe
                         SetState(OnBackup ? RouteState.Backup : RouteState.Vpn, OnBackup ? st.BackupTunnel : st.PrimaryTunnel);
                         return;
                     }
-                    Kill(st, true);
-                    if ((now - lastCycle).TotalSeconds >= 30)
+                    bool restartDue = (now - lastCycle).TotalSeconds >= 30;
+                    if (restartDue || !Wg.Running || KillSwitch.Active) Kill(st, true); // see the note where VpnDown is entered
+                    if (restartDue)
                     {
                         lastCycle = now;
                         bool nb = HasBackup(st) && !OnBackup;
@@ -689,7 +732,17 @@ namespace NetProbe
                 case RouteState.DpiOnly:
                     RefreshExclusions(st, false);
                     Kill(st, true);
-                    if (dpiDied && dpiRestarts < 5) { dpiRestarts++; Logger.Write(LogLevel.Warn, Tx("Перезапуск winws (") + dpiRestarts + ")"); StartDpi(); }
+                    if (Dpi.Running && dpiRestarts > 0 && (now - Dpi.StartedAt).TotalMinutes >= 3) dpiRestarts = 0; // it works: old failures no longer count
+                    if (dpiDied || !Dpi.Running)
+                    {
+                        if (dpiRestarts < 5) { dpiRestarts++; Logger.Write(LogLevel.Warn, Tx("Перезапуск winws (") + dpiRestarts + ")"); StartDpi(); }
+                        else
+                        {
+                            Logger.Write(LogLevel.Error, "winws.exe keeps stopping - DPI is off. Try another strategy (Configs - DPI).");
+                            DoDisconnect();
+                            SetState(RouteState.Off, "winws.exe keeps stopping");
+                        }
+                    }
                     break;
             }
         }

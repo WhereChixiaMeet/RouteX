@@ -121,7 +121,7 @@ namespace NetProbe
         }
 
         // Обновить xray: xray.exe, geoip.dat, geosite.dat. xray должен быть остановлен вызывающим.
-        public static string UpdateXray(Settings st, Action<string> status)
+        public static string UpdateXray(Settings st, Action<string> status, Action beforeInstall = null)
         {
             status(Tx("Проверка версии xray…"));
             var rel = Latest(XrayRepo, n => n.Equals(Environment.Is64BitOperatingSystem ? "Xray-windows-64.zip" : "Xray-windows-32.zip", StringComparison.OrdinalIgnoreCase));
@@ -129,12 +129,13 @@ namespace NetProbe
             string cur = XrayVersion(st);
             if (cur != "" && rel.Tag.TrimStart('v') == cur.TrimStart('v')) return Tx("Уже последняя версия: ") + rel.Tag;
             string ex = Download(rel, status);
+            if (beforeInstall != null) beforeInstall(); // the connection is dropped only now, after the download
             Directory.CreateDirectory(st.XrayPath);
-            foreach (var f in Directory.GetFiles(ex))
+            foreach (var f in Directory.GetFiles(ex).OrderBy(f0 => f0.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? 0 : 1))
             {
                 string name = Path.GetFileName(f);
                 if (!(name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".dat", StringComparison.OrdinalIgnoreCase))) continue;
-                File.Copy(f, Path.Combine(st.XrayPath, name), true);
+                if (!CopyCore(f, Path.Combine(st.XrayPath, name))) { TryDelete(ex); return name + " is in use - disconnect the VPN tunnel that runs on xray / sing-box and try again"; }
             }
             TryDelete(ex);
             return "xray " + rel.Tag + Tx(" установлен");
@@ -159,7 +160,7 @@ namespace NetProbe
         public static Release SingBoxLatest() { return Latest(SingBoxRepo, SingBoxAsset); }
 
         // Обновить sing-box (ядро TUN). Процесс должен быть остановлен вызывающим.
-        public static string UpdateSingBox(Settings st, Action<string> status)
+        public static string UpdateSingBox(Settings st, Action<string> status, Action beforeInstall = null)
         {
             status(Tx("Проверка версии sing-box…"));
             var rel = SingBoxLatest();
@@ -167,11 +168,12 @@ namespace NetProbe
             string cur = SingBoxVersion(st);
             if (cur != "" && rel.Tag.TrimStart('v') == cur.TrimStart('v')) return Tx("Уже последняя версия: ") + rel.Tag;
             string ex = Download(rel, status);
+            if (beforeInstall != null) beforeInstall();
             Directory.CreateDirectory(st.SingBoxPath);
             foreach (var f in Directory.GetFiles(ex, "*", SearchOption.AllDirectories))
             {
                 string name = Path.GetFileName(f);
-                if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)) File.Copy(f, Path.Combine(st.SingBoxPath, name), true);
+                if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)) { if (!CopyCore(f, Path.Combine(st.SingBoxPath, name))) { TryDelete(ex); return name + " is in use - disconnect the VPN tunnel that runs on xray / sing-box and try again"; } }
             }
             TryDelete(ex);
             return "sing-box " + rel.Tag + Tx(" установлен");
@@ -222,6 +224,9 @@ namespace NetProbe
             }
             foreach (var d in Directory.GetDirectories(from)) CopyDir(d, Path.Combine(to, Path.GetFileName(d)), filter);
         }
+
+        // false: the file is locked (the core is running in the VPN tunnel) - reported instead of an exception half-way
+        static bool CopyCore(string from, string to) { try { File.Copy(from, to, true); return true; } catch (IOException) { return false; } catch (UnauthorizedAccessException) { return false; } }
 
         static void TryDelete(string dir) { try { Directory.Delete(Path.GetDirectoryName(dir), true); } catch { } }
     }
