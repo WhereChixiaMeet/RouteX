@@ -117,3 +117,16 @@ Auto-connect on start and Windows autostart (Task Scheduler, highest privileges,
 - WireSock is single-instance: TunnlTo's `wiresock-client-service` must be stopped (the app offers to).
 - winws: QUIC/UDP of excluded processes is not covered.
 - System proxy only affects apps that honour it; use TUN for the rest.
+
+## 5.0.3 (reliability; overrides the notes above where they differ)
+- **VPN Only, silent probe with a live tunnel:** the state becomes `VpnDown`, but the kill switch is not applied while the tunnel process still runs (it keeps capturing the apps, nothing leaks). It is applied when the tunnel is actually restarted (30 s of silence) or the process is gone. Before, 7 s of probe silence blocked every Include app in the firewall.
+- `SpeedMeter` always runs (the router needs the link rate for `BusyFailoverSec` and for postponing planned restarts); `SpeedOn` only hides the numbers.
+- Sleep / resume is detected by a gap between loop iterations of the router and xray threads (`quietFrom`, 10 s + the usual limit before the VPN may be called silent).
+- Engines left by a previous run (crash, Task Manager) are closed before a start: `wiresock-client` (`Router.StartTunnel`), `sing-box` from the app folder (`SingBoxProcess.KillStale`, static `live` set), `xray` holding the subscription ports (`XrayManager.EnsurePorts`).
+- `Router.ShutdownSync` / `XrayManager.ShutdownSync` run `DoDisconnect` on their own thread and wait (15 s), instead of calling it from the UI thread.
+- `SafeFile.WriteAllText` (temp file + replace) for `settings.ini`, `servers.json`, `subscriptions.json`; `Settings.Save` is locked. A damaged entry in `servers.json` is skipped, an unreadable file is copied to `*.unreadable` first.
+- Subscription update keeps id / favourite / stats of a server whose display name changed (`ServerStore.Identity`); the download retries without the system proxy when that proxy is RouteX itself.
+- Core updates download first and only then stop the connection (`beforeInstall` in `Updater.UpdateXray` / `UpdateSingBox`).
+- `NameMigration.CleanupLeftovers` removes update staging folders older than 3 days.
+- Web UI: `snapshotStructure` ignores window / widget position fields (they re-rendered the whole page), the Log page list is refreshed live, the translation table and DPI strategies are cached between snapshots.
+- New log / error strings of 5.0.3 are plain English (no `Tx`), so they need no dictionary entries.

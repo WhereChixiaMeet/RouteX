@@ -30,7 +30,10 @@ let applyingSnapshot=false,pointerHeld=false,queuedSnapshot=null,snapshotTimer,s
 document.addEventListener('pointerdown',()=>pointerHeld=true,true);
 function releasePointer(){pointerHeld=false;clearTimeout(snapshotTimer);snapshotTimer=setTimeout(flushSnapshot,60);}
 document.addEventListener('pointerup',releasePointer,true);document.addEventListener('pointercancel',releasePointer,true);
-function snapshotStructure(s){const settings={...s.settings};for(const key of ['LastPage','WindowX','WindowY','WindowWidth','WindowHeight'])delete settings[key];return JSON.stringify([settings,s.active,s.busy,s.dpi,s.monitoring,s.source,s.configs,s.servers,s.lists,s.profiles,s.dpiDomains,s.dpiExclude,s.testRunning,s.tests,s.sites,s.logging,s.cores,s.artwork]);}
+// Bookkeeping fields are not structure. The old list named fields that do not exist (WindowX…), so every window move,
+// resize or widget drag (WinX / WinY / WinW / WinH / WidgetX…) re-rendered the whole page: menus closed, scroll jumped.
+// Per-server traffic totals change every 10 s while connected; they only matter on the Subscriptions page.
+function snapshotStructure(s){const settings={...s.settings};for(const key of ['LastPage','WinX','WinY','WinW','WinH','WidgetX','WidgetY','Widget2X','Widget2Y','LastUpdCheck','SideWidth'])delete settings[key];const serverRows=state.page==='subscriptions'?s.servers:s.servers.map(x=>({...x,total:''}));return JSON.stringify([settings,s.active,s.busy,s.dpi,s.monitoring,s.source,s.configs,serverRows,s.lists,s.profiles,s.dpiDomains,s.dpiExclude,s.testRunning,s.tests,s.sites,s.logging,s.cores,s.artwork]);}
 function refreshMeasurements(){const v=values();for(const[key,value]of Object.entries(v))app.querySelectorAll(`[data-metric-value="${key}"],[data-widget-value="${key}"],[data-stat="${key}"]`).forEach(e=>e.textContent=value);
  if(state.page==='monitor'){app.querySelectorAll('.r-probe-card').forEach((card,i)=>{const template=document.createElement('template');template.innerHTML=monitorCard(i===1);card.replaceWith(template.content.firstElementChild);});for(const[selector,speed]of [['[data-chart]',false],['[data-speed-chart]',true]]){const target=app.querySelector(selector);if(target)updateWave(target,speed);}}
  app.querySelectorAll('[data-route-detail]').forEach(e=>e.textContent=host[e.dataset.routeDetail]||'');
@@ -41,6 +44,13 @@ function flushSnapshot(){if(!queuedSnapshot||pointerHeld||!window.routexStartupS
  applyingSnapshot=true;absorb(snapshot);if(changed&&Date.now()<paletteEditUntil&&state.page==='settings'&&state.settingsTab==='appearance'){applyTheme();app.querySelectorAll('[data-theme-pick]').forEach(e=>e.setAttribute('aria-pressed',String(e.dataset.themePick===state.theme)));}else if(changed){const openDetails=[...app.querySelectorAll('details[open]')].map(e=>e.className);render();app.querySelectorAll('details').forEach(e=>{if(openDetails.includes(e.className))e.open=true;});}else refreshMeasurements();applyingSnapshot=false;
 }
 structuralSnapshot=snapshotStructure(host);
+// Log page: new lines are not "structure", so the list was redrawn only when something else changed on the page
+// ("Today (live)" stood still). Only the list is refreshed, and only when it differs; the scroll position is kept.
+const refreshWithoutLog=refreshMeasurements;let shownLog='';
+refreshMeasurements=function(){refreshWithoutLog();if(state.page!=='logs')return;const box=app.querySelector('.r-log');if(!box)return;
+ const last=eventLog[eventLog.length-1],first=eventLog[0],signature=eventLog.length+'|'+(first?first.time+first.text:'')+'|'+(last?last.time+last.text:'');if(signature===shownLog)return;shownLog=signature;
+ const template=document.createElement('template');template.innerHTML=renderers.logs();const fresh=template.content.querySelector('.r-log');if(!fresh||fresh.innerHTML===box.innerHTML)return;
+ const atEnd=box.scrollTop+box.clientHeight>=box.scrollHeight-6,top=box.scrollTop;box.innerHTML=fresh.innerHTML;box.scrollTop=atEnd?box.scrollHeight:top;};
 app.addEventListener('focusout',()=>{clearTimeout(snapshotTimer);snapshotTimer=setTimeout(flushSnapshot,80);});
 window.chrome.webview.addEventListener('message',event=>{const data=event.data;if(data.kind==='reply'){const promise=pending.get(data.id);if(!promise)return;pending.delete(data.id);data.error?promise.reject(new Error(data.error)):promise.resolve(data.value);return;}if(data.kind==='snapshot'){
  queuedSnapshot=data.value;clearTimeout(snapshotTimer);snapshotTimer=setTimeout(flushSnapshot,60);

@@ -66,15 +66,23 @@ namespace NetProbe
                 case "new-link-tunnel":NewTunnelFromLink();return new {selectedConfig=lbTun.SelectedItem};
                 case "config-from-link":{
                     var entry=ServerEntry.Parse(BrowserString(args,"link"));if(entry==null)throw new ArgumentException("Invalid VLESS / VMess / Trojan link");
-                    string name=BrowserString(args,"selectedConfig");if(!Tunnels.Exists(name))name=Tunnels.Safe(entry.Name==""?"Imported config":entry.Name);
-                    if(name=="")name="Imported config";TunnelProto.Save(name,entry);FillTunnels(name);LoadConnectUi();return new {selectedConfig=name};}
+                    string name=BrowserString(args,"selectedConfig");
+                    if(Tunnels.Exists(name)){
+                        // "From link" on a WireGuard tunnel wrote <name>.json next to <name>.conf: the .conf wins, nothing changed and nothing was said
+                        if(!TunnelProto.IsXray(name))throw new ArgumentException("This tunnel is WireGuard. Use \"New tunnel from link\" for a VLESS / VMess / Trojan link.");
+                    }else{
+                        // a new tunnel never replaces an existing one with the same name
+                        string wanted=Tunnels.Safe(entry.Name==""?"Imported config":entry.Name);if(wanted=="")wanted="Imported config";
+                        name=wanted;int copy=2;while(Tunnels.Exists(name))name=wanted+" "+copy++;
+                    }
+                    TunnelProto.Save(name,entry);FillTunnels(name);LoadConnectUi();return new {selectedConfig=name};}
                 case "fill-config-link":{
                     string name=BrowserSelectedTunnel(args);lbTun.SelectedItem=name;XrFromLink(SafeClip());return null;}
                 case "import-conf":case "import-config":ImportConf();return new {selectedConfig=lbTun.SelectedItem};
                 case "delete-config":DeleteTunnel(BrowserSelectedTunnel(args));return new {selectedConfig=lbTun.SelectedItem};
                 case "add-dpi":CreateStrategy("new","--wf-tcp=80,443 --wf-udp=443\r\n--filter-tcp=443 --dpi-desync=multisplit");return new {selectedDpi=lbStrat.SelectedItem};
-                case "copy-dpi":{string name=BrowserString(args,"selectedDpi");CreateStrategy(name+" (copy)",DpiConfigs.Read(name));return new {selectedDpi=lbStrat.SelectedItem};}
-                case "delete-dpi":{string name=BrowserString(args,"selectedDpi");DpiConfigs.Delete(name);FillStrategies(null);return new {selectedDpi=lbStrat.SelectedItem};}
+                case "copy-dpi":{string name=BrowserString(args,"selectedDpi");if(!DpiConfigs.Names().Contains(name))throw new ArgumentException("Select a strategy first");CreateStrategy(name+" (copy)",DpiConfigs.Read(name));return new {selectedDpi=lbStrat.SelectedItem};}
+                case "delete-dpi":{string name=BrowserString(args,"selectedDpi");if(!DpiConfigs.Names().Contains(name))throw new ArgumentException("Select a strategy first");DpiConfigs.Delete(name);StrategyDeleted(name);FillStrategies(null);return new {selectedDpi=lbStrat.SelectedItem};}
                 case "activate-dpi":st.DpiStrategy=BrowserString(args,"selectedDpi");st.Save();if(router.Dpi.Running)router.RestartDpi();FillStrategies(st.DpiStrategy);return null;
                 case "dpi-rename":{string old=BrowserString(args,"selectedDpi"),renamed=Tunnels.Safe(BrowserString(args,"text"));if(!DpiConfigs.Names().Contains(old)||renamed=="")throw new ArgumentException("Unknown strategy or empty name");if(renamed!=old&&DpiConfigs.Names().Contains(renamed))throw new ArgumentException("Strategy already exists");lbStrat.SelectedItem=old;tbStratName.Text=renamed;RenameStrategy();return new {selectedDpi=renamed};}
                 case "import-bat":BrowserNativeButton(PgDpi,null,"\uE8E5");return null;
@@ -194,6 +202,7 @@ namespace NetProbe
             var entry=TunnelProto.Load(name);if(entry==null)throw new ArgumentException("Unknown tunnel protocol");
             var fields=new Dictionary<string,string>{{"address","Address"},{"port","Port"},{"uuid","UserId"},{"flow","Flow"},{"cipher","Method"},{"security","Security"},{"sni","Sni"},{"fingerprint","Fp"},{"publicKey","Pbk"},{"shortId","Sid"},{"network","Network"},{"path","Path"},{"host","Host"},{"alpn","Alpn"},{"spx","Spx"},{"xhttpMode","Mode"},{"insecure","Insecure"}};
             string property;if(!fields.TryGetValue(field,out property))throw new ArgumentException("Unknown config field");
+            if(field=="port"){int port;if(!int.TryParse(text.Trim(),NumberStyles.Integer,CultureInfo.InvariantCulture,out port)||port<1||port>65535)throw new ArgumentException("Port must be a number from 1 to 65535");args["value"]=port;}
             var info=typeof(ServerEntry).GetField(property);info.SetValue(entry,Convert.ChangeType(args["value"],info.FieldType,CultureInfo.InvariantCulture));
             if(field=="path"&&entry.Network=="grpc")entry.ServiceName=text;
             TunnelProto.Save(name,entry);FillTunnels(name);LoadConnectUi();return null;

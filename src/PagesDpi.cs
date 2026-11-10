@@ -46,7 +46,7 @@ namespace NetProbe
             {
                 var n = lbStrat.SelectedItem; if (n == null) return;
                 if (MessageBox.Show(this, Tx("Удалить стратегию «") + n + "»?", "RouteX", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
-                DpiConfigs.Delete(n); FillStrategies(null);
+                DpiConfigs.Delete(n); StrategyDeleted(n); FillStrategies(null);
             };
             var bImpAll = IconBtn("", Tx("Импорт из zapret"), tt);
             bImpAll.Click += (s, e) =>
@@ -239,6 +239,13 @@ namespace NetProbe
             return null;
         }
 
+        // The active strategy was deleted: winws would report "strategy not found" on the next start. Fall back to the first one left.
+        void StrategyDeleted(string name)
+        {
+            if (!string.Equals(st.DpiStrategy, name, StringComparison.OrdinalIgnoreCase)) return;
+            st.DpiStrategy = DpiConfigs.Names().FirstOrDefault() ?? "general"; st.Save();
+            if (router.Dpi.Running) router.RestartDpi();
+        }
         void FillStrategies(string select)
         {
             if (lbStrat == null || lbStrat.IsDisposed) return;

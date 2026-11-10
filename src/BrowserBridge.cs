@@ -138,7 +138,7 @@ namespace NetProbe
             return new {
                 version=shownVersion,maximized=WindowState==FormWindowState.Maximized,settings,uiPreview=review,paths=new {dpi=st.ZapretPath},activeConfig=router.Active?router.Wg.TunnelName:st.PrimaryTunnel,whatsNew=st.WhatsNewPending==Version&&st.WhatsNewShownFor!=Version,
                 fonts=browserFonts.Value,languages=Tr.Codes.Select((code,i)=>new {id=code,name=Tr.Names[i]}).ToArray(),
-                labels=Tr.Dict("en").GroupBy(p=>p.Value).ToDictionary(g=>g.Key,g=>Tr.Tx(g.First().Key)),
+                labels=BrowserLabels(),
                 adapters=adapters.Select(a=>new {id=a.Id,name=a.Name+" · "+a.Ip}).ToArray(),artwork=BrowserArtwork(),
                 cores=new {xray=review||File.Exists(XrayProcess.Exe(st)),singbox=review||File.Exists(SingBoxProcess.Exe(st))},
                 active=shownActive,busy=shownBusy,locked=TunSettingsLocked||review&&shownActive,
@@ -146,10 +146,10 @@ namespace NetProbe
                 source=ActiveSource()==Source.Subs?"subscriptions":"configs",
                 page=curPage>=0&&curPage<BrowserPages.Length?BrowserPages[curPage]:"routing",
                 configs=Tunnels.Names().Select(BrowserConfig).ToArray(),
-                servers=ServerStore.Snapshot().Select(s=>new {id=s.Id,name=s.Name,group=ServerStore.GroupName(s.Group),groupId=s.Group,protocol=s.Protocol.ToUpperInvariant(),transport=s.Security.ToUpperInvariant()+" · "+s.Network.ToUpperInvariant(),address=s.Address,port=s.Port,country=s.Country==""?"—":s.Country,latency=s.Delay<0?(object)"—":s.Delay,speed=s.Speed<0?0:s.Speed/8,total=Bytes(s.TotalDown),favorite=s.Favorite,manual=!ServerStore.Subs.Any(sub=>sub.Id==s.Group)}).ToArray(),
+                servers=ServerStore.Snapshot().Select(s=>new {id=s.Id,name=s.Name,group=ServerStore.GroupName(s.Group),groupId=s.Group,protocol=s.Protocol.ToUpperInvariant(),transport=s.Security.ToUpperInvariant()+" · "+s.Network.ToUpperInvariant(),address=s.Address,port=s.Port,country=s.Country==""?"—":s.Country,latency=s.Delay<0?(object)"—":s.Delay,speed=s.Speed<0?0:Math.Round(s.Speed/8,s.Speed<80?2:1),total=Bytes(s.TotalDown),favorite=s.Favorite,manual=!ServerStore.Subs.Any(sub=>sub.Id==s.Group)}).ToArray(),
                 subscriptions=ServerStore.Subs.Select(s=>new {id=s.Id,name=s.Name,url=s.Url}).ToArray(),
                 lists=new {include=entries(AppLists.Get(AppLists.HybridApps)),strict=entries(AppLists.Get(AppLists.VpnOnlyApps)),exclude=entries(AppLists.Get(Router.TunExclKey(st)))},
-                profiles=DpiConfigs.Names().Select(n=>new {id=n,name=n,args=DpiConfigs.Read(n)}).ToArray(),
+                profiles=BrowserProfiles(),
                 dpiDomains=string.Join("\n",AppLists.Get(AppLists.DpiDomains)),dpiExclude=string.Join("\n",AppLists.DpiSitesExcl()),
                 channels=new {vpn=indicator(cardVpn),direct=indicator(cardDir)},
                 chart=new {vpn=latency(chart.HA??chart.A),direct=latency(chart.HB??chart.B),timeVpn=chart.TA.Select(t=>new DateTimeOffset(t).ToUnixTimeMilliseconds()).ToArray(),timeDirect=chart.TB.Select(t=>new DateTimeOffset(t).ToUnixTimeMilliseconds()).ToArray()},
@@ -162,6 +162,22 @@ namespace NetProbe
                 tg=new {running=TgProxy.Running,on=st.TgOn,error=TgProxy.Running?"":(TgProxy.LastError??""),state=tgpState.Text,address=tgpAddr.Text,link=tgpLink.Text,connections=TgStats.Active,total=TgStats.Total,ws=TgStats.Ws,cf=TgStats.Cf,sent=TgConst.Human(TgStats.Up),received=TgConst.Human(TgStats.Down)},
                 updates=new {available=appRelease!=null,text=appRelease==null?"":btnAppUpd!=null&&!btnAppUpd.Enabled?btnAppUpd.Text:"Update to "+appRelease.Tag,app=LabelText(lAppVer),zapret=LabelText(lZVer),xray=LabelText(lXVer),singbox=LabelText(lSVer)}
             };
+        }
+        // The snapshot is rebuilt every second while the window is visible. The translation table (over a thousand
+        // entries) and every DPI strategy file were rebuilt / re-read from disk each time.
+        string browserLabelsLang;Dictionary<string,string> browserLabelsCache;
+        Dictionary<string,string> BrowserLabels()
+        {
+            if(browserLabelsCache==null||browserLabelsLang!=st.Lang){browserLabelsCache=Tr.Dict("en").GroupBy(p=>p.Value).ToDictionary(g=>g.Key,g=>Tr.Tx(g.First().Key));browserLabelsLang=st.Lang;}
+            return browserLabelsCache;
+        }
+        string browserProfilesKey;object browserProfilesCache;
+        object BrowserProfiles()
+        {
+            var names=DpiConfigs.Names();
+            string key=string.Join("|",names.Select(n=>{try{return n+":"+File.GetLastWriteTimeUtc(DpiConfigs.PathOf(n)).Ticks;}catch{return n;}}));
+            if(browserProfilesCache==null||key!=browserProfilesKey){browserProfilesCache=names.Select(n=>new {id=n,name=n,args=DpiConfigs.Read(n)}).ToArray();browserProfilesKey=key;}
+            return browserProfilesCache;
         }
         static string LabelText(Label label){return label==null||label.IsDisposed?"":label.Text;}
         static string BrowserString(Dictionary<string,object> args,string name,string fallback="") { object value;return args.TryGetValue(name,out value)?Convert.ToString(value):fallback; }
