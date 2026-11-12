@@ -36,8 +36,10 @@ jobs:
           Expand-Archive mihomo.zip -DestinationPath mihomo-ci
           $exe = Get-ChildItem mihomo-ci -Filter *.exe | Select-Object -First 1
           New-Item -ItemType Directory -Force mihomo-home | Out-Null
-          & $exe.FullName -t -d "$PWD\mihomo-home" -f "$PWD\awgtest.txt.mihomo.yaml"
-          if ($LASTEXITCODE -ne 0) { throw 'mihomo rejected the AmneziaWG config' }
+          foreach ($cfg in 'awgtest.txt.mihomo.yaml', 'awgtest.txt.mihomo3.yaml') {
+            & $exe.FullName -t -d "$PWD\mihomo-home" -f "$PWD\$cfg"
+            if ($LASTEXITCODE -ne 0) { throw "mihomo rejected $cfg" }
+          }
 
       - uses: actions/upload-artifact@v4
         with:

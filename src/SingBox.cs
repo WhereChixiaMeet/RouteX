@@ -70,9 +70,7 @@ namespace NetProbe
             return res;
         }
 
-        // подстрока пути, как у WireSock. Regex.Escape writes "\ " for a space and "\#" for '#'; Go's regexp (sing-box)
-        // rejects "\ ", so an entry with a space ("Yandex Music.exe", "Program Files\...") made sing-box refuse the config.
-        static string Rx(string entry) { return "(?i)" + Regex.Escape(entry.Trim()).Replace("\\ ", " "); }
+        static string Rx(string entry) { return "(?i)" + Regex.Escape(entry.Trim()); } // подстрока пути, как у WireSock
 
         // logFile: куда sing-box пишет свои предупреждения и ошибки (вывод процесса не перехватывается — он переживает обновление RouteX)
         public static string Build(Settings st, TunLists l, string logFile = null)

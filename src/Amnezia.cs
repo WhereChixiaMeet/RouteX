@@ -20,7 +20,14 @@ namespace NetProbe
         public static readonly string[] Ints = { "Jc", "Jmin", "Jmax", "S1", "S2", "S3", "S4" };
         public static readonly string[] Strings = { "H1", "H2", "H3", "H4", "I1", "I2", "I3", "I4", "I5", "J1", "J2", "J3" };
         public const string Itime = "Itime";
-        public static IEnumerable<string> All { get { return Ints.Concat(Strings).Concat(new[] { Itime }); } }
+        // AmneziaWG 3.x (Amnezia app: "version 3.1"): its own device in mihomo ("version: 3"). Values are passed as text
+        // (ranges like "100-120"); the two switches are "on" / "off".
+        public static readonly string[] V3 = { "HeaderProtectionKey", "ContentPaddingAddition", "RekeyAfterTime", "RekeyTimeout", "RejectAfterTime", "KeepaliveTimeout", "MaxHandshakeAttempts" };
+        public static readonly string[] V3Mihomo = { "header-protection-key", "content-padding-addition", "rekey-after-time", "rekey-timeout", "reject-after-time", "keepalive-timeout", "max-handshake-attempts" };
+        public static readonly string[] V3Switches = { "RandomTrailers", "DisableCookies" };
+        public static readonly string[] V3SwitchesMihomo = { "random-trailers", "disable-cookies" };
+        public static bool On(string v) { v = (v ?? "").Trim(); return v != "" && !v.Equals("off", StringComparison.OrdinalIgnoreCase) && v != "0" && !v.Equals("false", StringComparison.OrdinalIgnoreCase); }
+        public static IEnumerable<string> All { get { return Ints.Concat(Strings).Concat(new[] { Itime }).Concat(V3).Concat(V3Switches); } }
     }
 
     // wg-quick text: [Interface] + the first [Peer]
@@ -77,7 +84,9 @@ namespace NetProbe
         public IEnumerable<string> Dns { get { return List(I("DNS")); } }
         public IEnumerable<string> AllowedIps { get { return List(P("AllowedIPs")); } }
 
-        public bool HasObfuscation { get { return AwgKeys.All.Any(k => { string v = I(k); return v != "" && v != "0"; }); } }
+        public bool HasObfuscation { get { return AwgKeys.All.Any(k => { string v = I(k); return v != "" && v != "0" && (!AwgKeys.V3Switches.Contains(k) || AwgKeys.On(v)); }); } }
+        // AmneziaWG 3.x, by the same markers as the Amnezia app
+        public bool IsV3 { get { return AwgKeys.V3.Any(k => I(k) != "") || AwgKeys.V3Switches.Any(k => AwgKeys.On(I(k))); } }
 
         // what is missing for a connection (null - nothing)
         public string Missing()
@@ -268,6 +277,8 @@ namespace NetProbe
     public static class MihomoConfig
     {
         static int Int(string v, out bool ok) { int n; ok = int.TryParse((v ?? "").Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out n); return n; }
+        // "25" or a range "25-35" (AmneziaWG 3 keepalive): mihomo takes one number, the lower bound is used
+        static int First(string v, out bool ok) { v = (v ?? "").Trim(); int d = v.IndexOf('-', v.Length > 0 ? 1 : 0); return Int(d > 0 ? v.Substring(0, d) : v, out ok); }
 
         public static string Build(Settings cs, AwgConf c)
         {
@@ -287,7 +298,7 @@ namespace NetProbe
             if (allowed.Length > 0) proxy["allowed-ips"] = allowed;
             bool ok; int n;
             n = Int(c.I("MTU"), out ok); if (ok && n >= 576 && n <= 9000) proxy["mtu"] = n;
-            n = Int(c.P("PersistentKeepalive"), out ok); if (ok && n > 0) proxy["persistent-keepalive"] = n;
+            n = First(c.P("PersistentKeepalive"), out ok); if (ok && n > 0) proxy["persistent-keepalive"] = n;
             // names of sites are resolved inside the tunnel by the DNS servers of the config, never by the local provider
             var dns = c.Dns.Where(d => { System.Net.IPAddress a; return System.Net.IPAddress.TryParse(d, out a); }).ToArray();
             proxy["remote-dns-resolve"] = true;
@@ -296,8 +307,16 @@ namespace NetProbe
             {
                 var o = new Dictionary<string, object>();
                 foreach (var k in AwgKeys.Ints) { n = Int(c.I(k), out ok); if (ok && n != 0) o[k.ToLowerInvariant()] = n; }
-                foreach (var k in AwgKeys.Strings) { string v = c.I(k); if (v != "") o[k.ToLowerInvariant()] = v; }
-                long it; if (long.TryParse(c.I(AwgKeys.Itime), NumberStyles.Integer, CultureInfo.InvariantCulture, out it) && it != 0) o["itime"] = it;
+                bool v3 = c.IsV3;
+                // J1-J3 and Itime exist only in 1.5; mihomo refuses them together with the 3.x options
+                foreach (var k in AwgKeys.Strings) { string v = c.I(k); if (v != "" && !(v3 && k.StartsWith("J", StringComparison.OrdinalIgnoreCase))) o[k.ToLowerInvariant()] = v; }
+                long it; if (!v3 && long.TryParse(c.I(AwgKeys.Itime), NumberStyles.Integer, CultureInfo.InvariantCulture, out it) && it != 0) o["itime"] = it;
+                if (v3)
+                {
+                    o["version"] = 3;
+                    for (int i = 0; i < AwgKeys.V3.Length; i++) { string v = c.I(AwgKeys.V3[i]); if (v != "") o[AwgKeys.V3Mihomo[i]] = v; }
+                    for (int i = 0; i < AwgKeys.V3Switches.Length; i++) if (AwgKeys.On(c.I(AwgKeys.V3Switches[i]))) o[AwgKeys.V3SwitchesMihomo[i]] = true;
+                }
                 proxy["amnezia-wg-option"] = o;
             }
             var cfg = new Dictionary<string, object>
