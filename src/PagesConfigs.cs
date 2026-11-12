@@ -123,7 +123,7 @@ namespace NetProbe
             var n = lbTun.SelectedItem; if (n == null) return;
             if (TunnelProto.IsAwg(n))
             {
-                var ae = TunnelProto.Load(n); string aerr;
+                var ae = TunnelProto.Load(n); string aerr = null;
                 if (ae == null || !AmneziaLink.SetText(ae, tbTunText.Text, out aerr)) { lTunInfo.Text = ae == null ? "?" : aerr; return; }
                 TunnelProto.Save(n, ae);
                 lTunInfo.Text = Tx("Сохранено") + " · " + Tunnels.Endpoint(n);

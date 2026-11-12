@@ -199,7 +199,7 @@ namespace NetProbe
             if(field=="protocol"){lbTun.SelectedItem=name;SwitchProto(text.ToLowerInvariant());return null;}
             if(field=="raw"&&TunnelProto.IsAwg(name)){
                 // AmneziaWG: the same text editor; the AWG parameters stay as written
-                var awgEntry=TunnelProto.Load(name);string awgErr;
+                var awgEntry=TunnelProto.Load(name);string awgErr=null;
                 if(awgEntry==null||!AmneziaLink.SetText(awgEntry,text,out awgErr))throw new ArgumentException(awgEntry==null?"Unknown tunnel protocol":awgErr);
                 TunnelProto.Save(name,awgEntry);FillTunnels(name);LoadConnectUi();return null;
             }
