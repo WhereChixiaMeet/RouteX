@@ -395,7 +395,7 @@ const logo='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAA
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ico=name=>`<i data-lucide="${name}" aria-hidden="true"></i>`;
 const nav=[['routing','radio-tower','Routing'],['subscriptions','cloud','Subscriptions'],['tg','messages-square','TG Proxy'],null,['monitor','activity','Monitor'],['configs','file-key-2','VPN configs'],['dpi','shield','DPI configs'],['tests','flask-conical','Tests'],['sites','globe','Sites'],['logs','scroll-text','Log & polling'],null,['settings','settings-2','Settings']];
-const descriptions={routing:'Apps: tunnel, Strict VPN, exclusions',subscriptions:'Servers and subscriptions',tg:'Telegram proxy',monitor:'Latency and transfer rate',configs:'WireGuard, VLESS, VMess, Trojan',dpi:'Profiles and domain lists',tests:'Connection checks',sites:'Site routing',logs:'Events and polling',settings:''};
+const descriptions={routing:'Apps: tunnel, Strict VPN, exclusions',subscriptions:'Servers and subscriptions',tg:'Telegram proxy',monitor:'Latency and transfer rate',configs:'WireGuard, AmneziaWG, VLESS, VMess, Trojan',dpi:'Profiles and domain lists',tests:'Connection checks',sites:'Site routing',logs:'Events and polling',settings:''};
 const palettes={
  dark:{bg:'#0d0f13',side:'#111319',panel:'#181b22',soft:'#1f232c',line:'#282d38',field:'#12151b',text:'#e6e8ee',muted:'#949daf',accent:'#ef4444',accent2:'#94a3b8',vpn:'#9a6bff',direct:'#06b6d4'},
  light:{bg:'#f3f5f9',side:'#eaedf3',panel:'#ffffff',soft:'#eaeef5',line:'#d6dbe4',field:'#fafbfd',text:'#141821',muted:'#60687a',accent:'#3b82f6',accent2:'#64748b',vpn:'#7c3aed',direct:'#0891b2'},
