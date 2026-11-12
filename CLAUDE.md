@@ -139,3 +139,7 @@ Auto-connect on start and Windows autostart (Task Scheduler, highest privileges,
 - CI: `RouteX.exe --awgtest <file>` (`AwgSelfTest.cs`, synthetic keys) runs in the test build, and the generated config is checked with the real Windows mihomo.
 - AmneziaWG 3.x keys (`HeaderProtectionKey`, `ContentPaddingAddition`, `RekeyAfterTime`, `RekeyTimeout`, `RejectAfterTime`, `KeepaliveTimeout`, `MaxHandshakeAttempts`, `RandomTrailers`, `DisableCookies`) switch mihomo to `version: 3` (`AwgConf.IsV3`, the same markers as the Amnezia app); J1–J3 / Itime are not sent then. `PersistentKeepalive` may be a range (`25-35`): the lower bound is used.
 - Checked against the Amnezia client source (exportController / awgProtocolConfig / server_scripts/awg/template.conf): key format, `last_config` as a JSON string, container `amnezia-awg` / `amnezia-awg2` with the protocol key `awg`.
+
+## 5.1.1
+- mihomo (AmneziaWG core) is part of the component updates: `CheckUpdates` checks it together with xray / sing-box (switch `UpdXray`; only when it is installed), tray notification and the Settings badge include it, Settings → Updates has the row "mihomo (AmneziaWG)" in both interfaces (`lMVer`, `UpdateMihomoUi`, web action `check-update:mihomo`).
+- `Updater.UpdateMihomo` keeps the previous build as `mihomo\mihomo.exe.old`; a new build that does not start (`mihomo -v` gives nothing) is rolled back at once. A running AmneziaWG tunnel is stopped only for the file replacement and connected again.

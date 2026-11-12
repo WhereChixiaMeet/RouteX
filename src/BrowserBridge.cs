@@ -166,7 +166,7 @@ namespace NetProbe
                 logging=new {errorsOnly=chkErrOnly.Checked,routesOnly=chkRouteOnly.Checked,days=cbLogDay.Items.OfType<DayItem>().Select(d=>new {id=d.Day.Date==DateTime.Today?"today":d.Day.ToString("yyyy-MM-dd"),name=d.ToString()}).ToArray()},
                 monitorInfo=review?"UI preview · simulated values · no VPN connection":infoLabel.Text,routeStatus=shownStatus,routeDetail=review?"xray · Personal config · TUN · Preview":board.Line1,routeDetail2=review?"VPN 52 ms · Direct 12 ms · Switches: 0 · Preview":board.Line2,engine=EngineText(),engineShort=EngineShort(),subscriptionState=review?(shownActive&&st.Source==1?"Connected":"Disconnected"):xBoard.State,subscriptionActive=review?(shownActive&&st.Source==1):xm.State==XState.Connected,
                 tg=new {running=TgProxy.Running,on=st.TgOn,error=TgProxy.Running?"":(TgProxy.LastError??""),state=tgpState.Text,address=tgpAddr.Text,link=tgpLink.Text,connections=TgStats.Active,total=TgStats.Total,ws=TgStats.Ws,cf=TgStats.Cf,sent=TgConst.Human(TgStats.Up),received=TgConst.Human(TgStats.Down)},
-                updates=new {available=appRelease!=null,text=appRelease==null?"":btnAppUpd!=null&&!btnAppUpd.Enabled?btnAppUpd.Text:"Update to "+appRelease.Tag,app=LabelText(lAppVer),zapret=LabelText(lZVer),xray=LabelText(lXVer),singbox=LabelText(lSVer)}
+                updates=new {available=appRelease!=null,text=appRelease==null?"":btnAppUpd!=null&&!btnAppUpd.Enabled?btnAppUpd.Text:"Update to "+appRelease.Tag,app=LabelText(lAppVer),zapret=LabelText(lZVer),xray=LabelText(lXVer),singbox=LabelText(lSVer),mihomo=LabelText(lMVer)}
             };
         }
         // The snapshot is rebuilt every second while the window is visible. The translation table (over a thousand

@@ -149,7 +149,7 @@ updateSettings=function(){const template=document.createElement('template');temp
  const rows=row('RouteX',u.app||('v'+host.version),'check-update:app',u.available?(u.text||'Update RouteX'):'Check RouteX updates',u.available?'download':'refresh-cw',u.available?'primary':'')
   +row('zapret',u.zapret,'check-update:zapret','Update zapret','download')
   +row('xray',u.xray,'check-update:xray','Update xray','download')
-  +row('sing-box (TUN)',u.singbox,'check-update:singbox','Update sing-box','download')
+  +row('sing-box (TUN)',u.singbox,'check-update:singbox','Update sing-box','download')   +row('mihomo (AmneziaWG)',u.mihomo||'','check-update:mihomo','Update mihomo','download')
   +row('Components','','check-update:check','Check updates','refresh-cw');
  const heading=template.content.querySelector('h3');if(heading)heading.insertAdjacentHTML('afterend',rows);else template.content.firstElementChild?.insertAdjacentHTML('afterbegin',rows);
  return template.innerHTML;};

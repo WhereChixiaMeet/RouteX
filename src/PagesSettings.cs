@@ -484,6 +484,10 @@ namespace NetProbe
             bSUp.Click += (s, e) => { SelectPage(PgServers); UpdateSingBoxUi(true); };
             row("sing-box (TUN)", bSUp, null);
             lSVer = Ui.Label("", Theme.Small, Theme.Muted); lSVer.Location = new Point(bSUp.Right + Theme.S(12), bSUp.Top + Theme.S(8)); setBody.Controls.Add(lSVer);
+            var bMUp = new FlatButton("Update mihomo") { Glyph = "\uE896" }.AutoW(); // AmneziaWG core (5.1.1)
+            bMUp.Click += (s, e) => UpdateMihomoUi(true);
+            row("mihomo (AmneziaWG)", bMUp, null);
+            lMVer = Ui.Label("", Theme.Small, Theme.Muted); lMVer.Location = new Point(bMUp.Right + Theme.S(12), bMUp.Top + Theme.S(8)); setBody.Controls.Add(lMVer);
             var bCheck = new FlatButton(Tx("Проверить обновления")) { Glyph = "\uE72C" }.AutoW();
             bCheck.Click += (s, e) => CheckUpdates(true);
             row("", bCheck, null);
@@ -606,7 +610,8 @@ namespace NetProbe
             lay();
         }
 
-        Label lZVer, lXVer, lSVer, lAppVer;
+        Label lZVer, lXVer, lSVer, lMVer, lAppVer;
+        bool mihomoUpdating;
         System.Windows.Forms.Timer bgDimTimer;
         bool updZapret, updXray;
 
@@ -634,6 +639,10 @@ namespace NetProbe
             {
                 string zc = Updater.ZapretVersion(st), xc = Updater.XrayVersion(st), sc = Updater.SingBoxVersion(st), zl = null, xl = null, sl = null, err = null;
                 if ((manual || st.UpdXray) && (sc != "" || manual)) try { sl = Updater.SingBoxLatest().Tag; } catch { }
+                // the AmneziaWG core is checked together with xray / sing-box (same switch); not installed = nothing to check
+                string mc = Updater.MihomoVersion(st), ml = null;
+                if ((manual || st.UpdXray) && mc != "") try { ml = Updater.MihomoLatest().Tag; } catch { }
+                bool mNew = ml != null && mc != "" && ml.TrimStart('v') != mc.TrimStart('v');
                 if (manual || st.UpdZapret) try { zl = Updater.Latest(Updater.ZapretRepo, n => n.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)).Tag; } catch (Exception ex) { err = ex.Message; }
                 if (manual || st.UpdXray) try { xl = Updater.Latest(Updater.XrayRepo, n => n.StartsWith("Xray-windows", StringComparison.OrdinalIgnoreCase)).Tag; } catch (Exception ex) { err = ex.Message; }
                 st.LastUpdCheck = DateTime.Now.ToOADate(); st.Save();
@@ -645,15 +654,36 @@ namespace NetProbe
                 {
                     BeginInvoke((Action)(() =>
                     {
-                        if (lZVer != null && !lZVer.IsDisposed) { lZVer.Text = fmt(zc, zl) + (err != null && zl == null ? "  ·  " + err : ""); lXVer.Text = fmt(xc, xl); if (lSVer != null) lSVer.Text = fmt(sc, sl); }
+                        if (lZVer != null && !lZVer.IsDisposed) { lZVer.Text = fmt(zc, zl) + (err != null && zl == null ? "  ·  " + err : ""); lXVer.Text = fmt(xc, xl); if (lSVer != null) lSVer.Text = fmt(sc, sl); if (lMVer != null && !mihomoUpdating) lMVer.Text = mc == "" ? "installed with the first AmneziaWG key" : fmt(mc, ml); }
                         UpdateCoreLabel();
-                        updZapret = zNew; updXray = xNew || sNew; ApplyUpdateBadges(); TgUpdateUi();
-                        if (!manual && (zNew || xNew || sNew) && st.UpdNotify && tray != null)
-                            try { tray.ShowBalloonTip(5000, Tx("RouteX: есть обновления"), (zNew ? "zapret " + zl + "  " : "") + (xNew ? "xray " + xl + "  " : "") + (sNew ? "sing-box " + sl : ""), System.Windows.Forms.ToolTipIcon.Info); } catch { }
-                        if (zNew || xNew) Logger.Write(LogLevel.Info, Tx("Доступны обновления: ") + (zNew ? "zapret " + zl + " " : "") + (xNew ? "xray " + xl : ""));
+                        updZapret = zNew; updXray = xNew || sNew || mNew; ApplyUpdateBadges(); TgUpdateUi();
+                        if (!manual && (zNew || xNew || sNew || mNew) && st.UpdNotify && tray != null)
+                            try { tray.ShowBalloonTip(5000, Tx("RouteX: есть обновления"), (zNew ? "zapret " + zl + "  " : "") + (xNew ? "xray " + xl + "  " : "") + (sNew ? "sing-box " + sl + "  " : "") + (mNew ? "mihomo " + ml : ""), System.Windows.Forms.ToolTipIcon.Info); } catch { }
+                        if (zNew || xNew || mNew) Logger.Write(LogLevel.Info, Tx("Доступны обновления: ") + (zNew ? "zapret " + zl + " " : "") + (xNew ? "xray " + xl + " " : "") + (mNew ? "mihomo " + ml : ""));
                     }));
                 }
                 catch { }
+            });
+        }
+
+        // Update of the AmneziaWG core. The download comes first; a running AmneziaWG tunnel is stopped only for the
+        // replacement of the file and connected again after it.
+        void UpdateMihomoUi(bool ask)
+        {
+            if (mihomoUpdating) return;
+            string cur = Updater.MihomoVersion(st);
+            if (ask && MessageBox.Show(this, (cur == "" ? "The AmneziaWG core (mihomo) is not installed." : "mihomo " + cur + ".") + "\r\n" + "Download the latest version from GitHub (MetaCubeX/mihomo)?", "RouteX", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            mihomoUpdating = true;
+            Action<string> show = m => { try { BeginInvoke((Action)(() => { if (lMVer != null && !lMVer.IsDisposed) lMVer.Text = m; })); } catch { } };
+            System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+            {
+                var stopped = new bool[1];
+                string res;
+                try { res = Updater.UpdateMihomo(st, show, () => { if (router.Active && router.Wg.IsXray && router.Wg.Xr.IsAwg) { stopped[0] = true; router.ShutdownSync(); } }); }
+                catch (Exception ex) { res = Tx("Ошибка обновления: ") + ex.Message; }
+                Logger.Write(LogLevel.Info, res);
+                show(res);
+                try { BeginInvoke((Action)(() => { mihomoUpdating = false; if (stopped[0]) router.Connect(); CheckUpdates(true); if (ask) MessageBox.Show(this, res, "RouteX"); })); } catch { mihomoUpdating = false; }
             });
         }
 

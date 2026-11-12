@@ -128,6 +128,7 @@ namespace NetProbe
                     if(id=="zapret")UpdateZapretUi(new FlatButton(Tx("Обновить zapret")));
                     else if(id=="xray")UpdateCore(true);
                     else if(id=="singbox")UpdateSingBoxUi(true);
+                    else if(id=="mihomo")UpdateMihomoUi(true);
                     else if(id=="app"){if(appRelease!=null)DoAppUpdate();else CheckAppUpdate(true);}
                     else{CheckUpdates(true);CheckAppUpdate(false);}
                     return null;

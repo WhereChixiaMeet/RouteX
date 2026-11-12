@@ -149,6 +149,7 @@ namespace NetProbe
             string arch = Environment.Is64BitOperatingSystem ? "mihomo-windows-amd64-v1-v" : "mihomo-windows-386-v";
             return n.StartsWith(arch) && n.EndsWith(".zip");
         }
+        public static Release MihomoLatest() { return Latest(MihomoRepo, MihomoAsset); }
         public static string MihomoVersion(Settings st)
         {
             string exe = MihomoProcess.Exe(st);
@@ -162,7 +163,7 @@ namespace NetProbe
         public static string UpdateMihomo(Settings st, Action<string> status, Action beforeInstall = null)
         {
             status("Checking the mihomo version…");
-            var rel = Latest(MihomoRepo, MihomoAsset);
+            var rel = MihomoLatest();
             if (rel.AssetUrl == "") return "No Windows build in the mihomo release";
             string cur = MihomoVersion(st);
             if (cur != "" && rel.Tag.TrimStart('v') == cur.TrimStart('v')) return Tx("Уже последняя версия: ") + rel.Tag;
@@ -171,8 +172,18 @@ namespace NetProbe
             if (exe == null) { TryDelete(ex); return "No mihomo.exe in " + rel.AssetName; }
             if (beforeInstall != null) beforeInstall();
             Directory.CreateDirectory(st.MihomoPath);
-            if (!CopyCore(exe, MihomoProcess.Exe(st))) { TryDelete(ex); return "mihomo.exe is in use - disconnect the AmneziaWG tunnel and try again"; }
+            // the previous version stays next to it as mihomo.exe.old: a new build that does not start is rolled back at
+            // once, and one that starts but connects worse can be put back by hand
+            string target = MihomoProcess.Exe(st), old = target + ".old";
+            bool had = File.Exists(target);
+            if (had) try { File.Copy(target, old, true); } catch { had = false; }
+            if (!CopyCore(exe, target)) { TryDelete(ex); return "mihomo.exe is in use - disconnect the AmneziaWG tunnel and try again"; }
             TryDelete(ex);
+            if (MihomoVersion(st) == "")
+            {
+                if (had) { try { File.Copy(old, target, true); } catch { } return "mihomo " + rel.Tag + " does not start on this PC - the previous version " + cur + " was kept"; }
+                return "mihomo " + rel.Tag + " does not start on this PC";
+            }
             return "mihomo " + rel.Tag + Tx(" установлен");
         }
 
