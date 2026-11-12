@@ -191,7 +191,7 @@ namespace NetProbe
         {
             // first AmneziaWG connection: get the core now (GitHub, MetaCubeX/mihomo), the same way xray is installed
             string core = MihomoCore.Ensure(st);
-            if (core != null) return "AmneziaWG core (mihomo) could not be installed: " + core;
+            if (core != null) return "AmneziaWG cores could not be installed: " + core;
             if (!File.Exists(SingBoxProcess.Exe(st))) return Tx("Не найден sing-box.exe — установите ядро TUN на вкладке Subscriptions («sing-box»)");
             var cs = TunSettings(st);
             cs.TunServerDomain = e.Address;

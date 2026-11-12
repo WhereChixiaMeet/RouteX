@@ -326,6 +326,15 @@ namespace NetProbe
         {
             lock (lk)
             {
+                // the TUN core is needed too: someone who used only WireSock may not have it yet
+                if (!File.Exists(SingBoxProcess.Exe(st)))
+                {
+                    Logger.Write(LogLevel.Info, "TUN core (sing-box) is not installed - downloading for AmneziaWG");
+                    string sres;
+                    try { sres = Updater.UpdateSingBox(st, s => { }); } catch (Exception ex) { sres = ex.Message; }
+                    Logger.Write(LogLevel.Info, "sing-box: " + sres);
+                    if (!File.Exists(SingBoxProcess.Exe(st))) return "sing-box: " + sres;
+                }
                 if (File.Exists(MihomoProcess.Exe(st))) return null;
                 Logger.Write(LogLevel.Info, "AmneziaWG core (mihomo) is not installed - downloading from GitHub (MetaCubeX/mihomo)");
                 string res;
@@ -336,7 +345,7 @@ namespace NetProbe
         }
         public static void EnsureAsync(Settings st)
         {
-            if (File.Exists(MihomoProcess.Exe(st))) return;
+            if (File.Exists(MihomoProcess.Exe(st)) && File.Exists(SingBoxProcess.Exe(st))) return;
             var copy = st.Clone();
             System.Threading.ThreadPool.QueueUserWorkItem(_ => { try { Ensure(copy); } catch { } });
         }
