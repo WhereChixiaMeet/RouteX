@@ -50,6 +50,8 @@ namespace NetProbe
         [STAThread]
         static void Main(string[] args)
         {
+            int awgTest = Array.FindIndex(args, a => a == "--awgtest"); // CI check of AmneziaWG keys, before anything touches the profile
+            if (awgTest >= 0 && awgTest + 1 < args.Length) { AwgSelfTest.Run(args[awgTest + 1]); return; }
 #if WEB_UI
             UiStartupTiming.Mark("process entry");
 #endif

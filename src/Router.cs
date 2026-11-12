@@ -50,7 +50,7 @@ namespace NetProbe
 
         public Router()
         {
-            Wg.Exited += code => { wgDied = true; Logger.Write(LogLevel.Warn, (Wg.IsXray ? "xray TUN: " + Tx("туннель завершился (код ") : Tx("WireSock завершился (код ")) + code + ")"); wake.Set(); };
+            Wg.Exited += code => { wgDied = true; Logger.Write(LogLevel.Warn, (Wg.IsXray ? (Wg.Xr.IsAwg ? "AmneziaWG TUN: " : "xray TUN: ") + Tx("туннель завершился (код ") : Tx("WireSock завершился (код ")) + code + ")"); wake.Set(); };
             Dpi.Exited += code => { dpiDied = true; Logger.Write(LogLevel.Warn, Tx("winws.exe завершился (код ") + code + ")"); wake.Set(); };
             Wg.Output += s => { if (GetSettings != null && GetSettings().LogPolls) Logger.Write(LogLevel.Poll, "[WireSock] " + s); else if (s.IndexOf("error", StringComparison.OrdinalIgnoreCase) >= 0 || s.IndexOf("fail", StringComparison.OrdinalIgnoreCase) >= 0) Logger.Write(LogLevel.Warn, "[WireSock] " + s); };
             Dpi.Output += s => Logger.Write(LogLevel.Poll, "[winws] " + s);
@@ -158,7 +158,12 @@ namespace NetProbe
                 var st = GetSettings();
                 Func<string, string> g = k => h.ContainsKey(k) ? h[k] : "";
                 System.Diagnostics.Process wg = null;
-                if (TunnelProto.IsXray(g("tunnel")))
+                if (TunnelProto.IsAwg(g("tunnel")))
+                {
+                    var mp = SelfUpdate.FindChild("mihomo", st.MihomoPath); var sp = SelfUpdate.FindChild("sing-box", st.SingBoxPath);
+                    if (mp != null && sp != null) { Wg.AttachAwg(mp, sp, g("tunnel")); wg = mp; }
+                }
+                else if (TunnelProto.IsXray(g("tunnel")))
                 {
                     var xp = SelfUpdate.FindChild("xray", st.XrayPath); var sp = SelfUpdate.FindChild("sing-box", st.SingBoxPath);
                     if (xp != null && sp != null) { Wg.AttachXray(xp, sp, g("tunnel")); wg = xp; }
@@ -190,7 +195,7 @@ namespace NetProbe
         {
             try
             {
-                string s = "xray TUN: " + (Wg.IsXray ? Wg.Xr.Diag(GetSettings()) : "WireSock " + (Wg.Running ? Tx("работает") : Tx("не работает")));
+                string s = (Wg.IsXray && Wg.Xr.IsAwg ? "AmneziaWG TUN: " : "xray TUN: ") + (Wg.IsXray ? Wg.Xr.Diag(GetSettings()) : "WireSock " + (Wg.Running ? Tx("работает") : Tx("не работает")));
                 if (Wg.IsXray) s += XrayTunnel.LogTails(GetSettings(), 4);
                 Logger.Write(LogLevel.Warn, Tx("Состояние туннеля при падении: ") + s);
             }

@@ -321,6 +321,7 @@ namespace NetProbe
         }
 
         public string SingBoxPath { get { return string.IsNullOrWhiteSpace(SingBoxDir) ? Path.Combine(Root, "singbox") : SingBoxDir.Trim(); } }
+        public string MihomoPath { get { return Path.Combine(Root, "mihomo"); } } // AmneziaWG core (5.1.0)
         public string XrayPath { get { return string.IsNullOrWhiteSpace(XrayDir) ? Path.Combine(Root, "xray") : XrayDir.Trim(); } }
         public static string ResolveDpiSourceFolder(string folder){string value=string.IsNullOrWhiteSpace(folder)?"zapret":Environment.ExpandEnvironmentVariables(folder.Trim());return Path.GetFullPath(Path.IsPathRooted(value)?value:Path.Combine(Root,value));}
         public string ZapretPath { get { return ResolveDpiSourceFolder(ZapretDir); } }

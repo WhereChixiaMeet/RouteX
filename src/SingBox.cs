@@ -70,7 +70,9 @@ namespace NetProbe
             return res;
         }
 
-        static string Rx(string entry) { return "(?i)" + Regex.Escape(entry.Trim()); } // подстрока пути, как у WireSock
+        // подстрока пути, как у WireSock. Regex.Escape writes "\ " for a space and "\#" for '#'; Go's regexp (sing-box)
+        // rejects "\ ", so an entry with a space ("Yandex Music.exe", "Program Files\...") made sing-box refuse the config.
+        static string Rx(string entry) { return "(?i)" + Regex.Escape(entry.Trim()).Replace("\\ ", " "); }
 
         // logFile: куда sing-box пишет свои предупреждения и ошибки (вывод процесса не перехватывается — он переживает обновление RouteX)
         public static string Build(Settings st, TunLists l, string logFile = null)
@@ -83,7 +85,7 @@ namespace NetProbe
                 new Dictionary<string, object> { { "protocol", "dns" }, { "action", "hijack-dns" } },
                 new Dictionary<string, object> { { "ip_is_private", true }, { "outbound", "direct" } },
                 // собственные процессы — всегда напрямую, иначе петля
-                new Dictionary<string, object> { { "process_name", new[] { "xray.exe", "sing-box.exe", "netprobe-direct.exe", "wiresock-client.exe", "winws.exe" } }, { "outbound", "direct" } }
+                new Dictionary<string, object> { { "process_name", new[] { "xray.exe", "mihomo.exe", "sing-box.exe", "netprobe-direct.exe", "wiresock-client.exe", "winws.exe" } }, { "outbound", "direct" } }
             };
             // домены под приложением (Include DPI): это приложение + этот домен → напрямую (winws обработает), остальное как обычно
             var dnsRules = new List<object>();

@@ -16,6 +16,7 @@ namespace NetProbe
     {
         public string Id = "", Group = "", Name = "", Protocol = "", Address = "", UserId = "", Method = "", Flow = "", Network = "tcp", Security = "none";
         public string Sni = "", Fp = "", Pbk = "", Sid = "", Spx = "", Path = "", Host = "", Alpn = "", ServiceName = "", Mode = "", HeaderType = "", Link = "";
+        public string Awg = "";           // AmneziaWG tunnel (Protocol "awg"): the whole wg-quick text with Jc / S1 / H1 …; not in servers.json
         public string Extra = "";         // xhttp: JSON из параметра extra (xmux, xPaddingBytes, downloadSettings …) — как в v2rayN
         public int Port, AlterId;
         public bool Favorite, Insecure;

@@ -141,6 +141,41 @@ namespace NetProbe
             return "xray " + rel.Tag + Tx(" установлен");
         }
 
+        // AmneziaWG core (5.1.0): mihomo from MetaCubeX/mihomo, the amd64-v1 build (runs on any x64 CPU)
+        public const string MihomoRepo = "MetaCubeX/mihomo";
+        static bool MihomoAsset(string n)
+        {
+            n = n.ToLowerInvariant();
+            string arch = Environment.Is64BitOperatingSystem ? "mihomo-windows-amd64-v1-v" : "mihomo-windows-386-v";
+            return n.StartsWith(arch) && n.EndsWith(".zip");
+        }
+        public static string MihomoVersion(Settings st)
+        {
+            string exe = MihomoProcess.Exe(st);
+            if (!File.Exists(exe)) return "";
+            var r = Proc.Run(exe, "-v", 8000);
+            foreach (var w in (r.Out ?? "").Split(new[] { ' ', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                if (w.Length > 1 && w[0] == 'v' && char.IsDigit(w[1])) return w;
+            return "";
+        }
+        // the archive holds one mihomo-windows-<arch>.exe; it is installed as mihomo\mihomo.exe
+        public static string UpdateMihomo(Settings st, Action<string> status, Action beforeInstall = null)
+        {
+            status("Checking the mihomo version…");
+            var rel = Latest(MihomoRepo, MihomoAsset);
+            if (rel.AssetUrl == "") return "No Windows build in the mihomo release";
+            string cur = MihomoVersion(st);
+            if (cur != "" && rel.Tag.TrimStart('v') == cur.TrimStart('v')) return Tx("Уже последняя версия: ") + rel.Tag;
+            string ex = Download(rel, status);
+            var exe = Directory.GetFiles(ex, "*.exe", SearchOption.AllDirectories).FirstOrDefault();
+            if (exe == null) { TryDelete(ex); return "No mihomo.exe in " + rel.AssetName; }
+            if (beforeInstall != null) beforeInstall();
+            Directory.CreateDirectory(st.MihomoPath);
+            if (!CopyCore(exe, MihomoProcess.Exe(st))) { TryDelete(ex); return "mihomo.exe is in use - disconnect the AmneziaWG tunnel and try again"; }
+            TryDelete(ex);
+            return "mihomo " + rel.Tag + Tx(" установлен");
+        }
+
         public const string SingBoxRepo = "SagerNet/sing-box";
 
         public static string SingBoxVersion(Settings st)

@@ -118,6 +118,8 @@ namespace NetProbe
         {
             if (tsProto == null) return;
             int idx = name == null ? 0 : TunnelProto.IndexOf(name);
+            bool awg = name != null && TunnelProto.IsAwg(name); // AmneziaWG: edited as text, like WireGuard
+            if (awg) idx = 0;
             tsProto.SelectedKey = TunnelProto.Ids[idx]; tsProto.Invalidate();
             bool x = idx > 0;
             xrForm.Visible = x; tbTunText.Visible = !x;
@@ -184,6 +186,7 @@ namespace NetProbe
         void SwitchProto(string p)
         {
             var n = lbTun.SelectedItem; if (n == null) return;
+            if (p == "amneziawg" || p == "awg") return; // AmneziaWG comes only from a vpn:// key or its text, there is no empty form
             bool wasX = TunnelProto.IsXray(n);
             if (p == "wireguard")
             {
@@ -205,7 +208,7 @@ namespace NetProbe
             }
             else
             {
-                var e = TunnelProto.Load(n) ?? new ServerEntry(); e.Protocol = p;
+                var e = TunnelProto.Load(n) ?? new ServerEntry(); if (e.Protocol == "awg") { e.Awg = ""; e.Network = "tcp"; } e.Protocol = p;
                 if (p != "vless") { e.Flow = ""; if (e.Security == "reality") e.Security = "tls"; }
                 TunnelProto.Save(n, e);
             }
@@ -217,11 +220,12 @@ namespace NetProbe
         void NewTunnelFromLink()
         {
             string err; var e = TunnelProto.FromLink(SafeClip(), out err);
-            if (e == null) { Notice.Show(this, Tx("Новый туннель из ссылки"), err + "\r\n" + Tx("Скопируй ссылку vless:// / vmess:// / trojan:// в буфер обмена и нажми ещё раз.")); return; }
+            if (e == null) { Notice.Show(this, Tx("Новый туннель из ссылки"), err + "\r\n" + Tx("Скопируй ссылку vless:// / vmess:// / trojan:// в буфер обмена и нажми ещё раз.") + "\r\nvpn:// (Amnezia) works too."); return; }
             FlushTunnel();
-            string baseName = Tunnels.Safe(string.IsNullOrWhiteSpace(e.Name) ? e.Protocol + " " + e.Address : e.Name), n = baseName; int k = 2;
+            string baseName = Tunnels.Safe(string.IsNullOrWhiteSpace(e.Name) ? (e.Protocol == "awg" ? "AmneziaWG" : e.Protocol) + " " + e.Address : e.Name), n = baseName; int k = 2;
             while (Tunnels.Exists(n)) n = baseName + " " + k++;
             e.Name = n; TunnelProto.Save(n, e);
+            if (e.Protocol == "awg") MihomoCore.EnsureAsync(st); // the AmneziaWG core is fetched now, not at the first connection
             Logger.Write(LogLevel.Info, Tx("Туннель «") + n + Tx("» добавлен из ссылки: ") + e.Transport + " · " + e.Endpoint);
             if (!Tunnels.Exists(st.PrimaryTunnel)) { st.PrimaryTunnel = n; st.Save(); }
             FillTunnels(n); LoadConnectUi(); UpdateModeUi();

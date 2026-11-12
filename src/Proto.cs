@@ -21,7 +21,11 @@ namespace NetProbe
 
         public static string JsonPath(string name) { return Path.Combine(Tunnels.Dir, Tunnels.Safe(name) + ".json"); }
         // движок туннеля для подписей: «VLESS · xray» / «VMess · xray» / «Trojan · xray» или «WireSock» (WireGuard)
-        public static string EngineName(string name) { return IsXray(name) ? Names[IndexOf(name)] + " · xray" : "WireSock"; }
+        public static string EngineName(string name) { return IsAwg(name) ? "AmneziaWG · mihomo" : IsXray(name) ? Names[IndexOf(name)] + " · xray" : "WireSock"; }
+        // AmneziaWG tunnel (5.1.0): a .json tunnel with Protocol "awg"; runs on mihomo behind the same sing-box TUN
+        public static bool IsAwg(string name) { if (!IsXray(name)) return false; var e = Load(name); return e != null && e.Protocol == "awg"; }
+        // protocol label for lists and logs
+        public static string Label(string name) { return IsAwg(name) ? "AmneziaWG" : IsXray(name) ? Names[IndexOf(name)] : "WireGuard"; }
         // нужен ли WireSock: основной или включённый резервный туннель — WireGuard
         public static bool NeedsWiresock(Settings st) { return (!string.IsNullOrWhiteSpace(st.PrimaryTunnel) && !IsXray(st.PrimaryTunnel)) || (st.BackupEnabled && !string.IsNullOrWhiteSpace(st.BackupTunnel) && !IsXray(st.BackupTunnel)); }
         public static bool IsXray(string name) { return !string.IsNullOrWhiteSpace(name) && !File.Exists(Tunnels.PathOf(name)) && File.Exists(JsonPath(name)); }
@@ -63,6 +67,7 @@ namespace NetProbe
         public static string Missing(ServerEntry e)
         {
             if (e == null) return Tx("конфиг не читается");
+            if (e.Protocol == "awg") return AwgConf.Parse(e.Awg).Missing();
             var m = new List<string>();
             if (string.IsNullOrWhiteSpace(e.Address)) m.Add(Tx("адрес"));
             if (e.Port <= 0 || e.Port > 65535) m.Add(Tx("порт"));
@@ -77,8 +82,9 @@ namespace NetProbe
         {
             err = null;
             link = (link ?? "").Trim();
+            if (AmneziaLink.Is(link)) return AmneziaLink.ToEntry(link, out err); // Amnezia key → AmneziaWG tunnel
             if (!(link.StartsWith("vless://", StringComparison.OrdinalIgnoreCase) || link.StartsWith("vmess://", StringComparison.OrdinalIgnoreCase) || link.StartsWith("trojan://", StringComparison.OrdinalIgnoreCase) || link.StartsWith("ss://", StringComparison.OrdinalIgnoreCase)))
-            { err = Tx("Нужна ссылка vless://, vmess:// или trojan://"); return null; }
+            { err = "Need a vless://, vmess://, trojan:// or vpn:// (Amnezia) link"; return null; }
             try
             {
                 var e = ServerEntry.Parse(link);
@@ -88,7 +94,7 @@ namespace NetProbe
             catch (Exception ex) { err = Tx("Ссылка не разобрана: ") + ex.Message; return null; }
         }
 
-        public static string Endpoint(string name) { var e = Load(name); return e != null ? e.Protocol.ToUpperInvariant() + " · " + e.Endpoint : ""; }
+        public static string Endpoint(string name) { var e = Load(name); return e != null ? (e.Protocol == "awg" ? "AWG" : e.Protocol.ToUpperInvariant()) + " · " + e.Endpoint : ""; }
     }
 
     // Туннель xray-семейства: xray (socks на своём порту) + sing-box TUN со списками приложений Routing.
@@ -96,7 +102,9 @@ namespace NetProbe
     public class XrayTunnel
     {
         readonly XrayProcess x = new XrayProcess();
+        readonly MihomoProcess m = new MihomoProcess(); // AmneziaWG tunnels
         readonly SingBoxProcess sb = new SingBoxProcess();
+        volatile bool awg;                              // the running tunnel is AmneziaWG (mihomo instead of xray)
         public string TunnelName = "";
         public DateTime StartedAt;
         public event Action<int> Exited;
@@ -106,13 +114,15 @@ namespace NetProbe
 
         public XrayTunnel()
         {
-            x.Exited += c => { if (!stopping) { var h = Exited; if (h != null) h(c); } };
+            x.Exited += c => { if (!stopping && !awg) { var h = Exited; if (h != null) h(c); } };
+            m.Exited += c => { if (!stopping && awg) { var h = Exited; if (h != null) h(c); } };
             sb.Exited += c => { if (!stopping) { var h = Exited; if (h != null) h(c); } };
             sb.Output += s => { if (s.IndexOf("ERROR", StringComparison.OrdinalIgnoreCase) >= 0 || s.IndexOf("FATAL", StringComparison.OrdinalIgnoreCase) >= 0) { var h = Output; if (h != null) h("[sing-box] " + s); } };
         }
 
-        public bool Running { get { return x.Running && sb.Running; } }
-        public int Pid { get { return x.Pid; } }
+        public bool Running { get { return (awg ? m.Running : x.Running) && sb.Running; } }
+        public int Pid { get { return awg ? m.Pid : x.Pid; } }
+        public bool IsAwg { get { return awg; } }
 
         public static int Port(Settings st) { return st.TunnelSocksPort; }
 
@@ -132,6 +142,13 @@ namespace NetProbe
                         Logger.Write(LogLevel.Warn, Tx("Зависший xray.exe RouteX от прошлого запуска держал порт туннеля ") + port + " (PID " + pid + Tx(") — закрыт"));
                         continue;
                     }
+                    bool ourMihomo = path != "" && path.StartsWith(st.MihomoPath, StringComparison.OrdinalIgnoreCase) && string.Equals(Path.GetFileName(path), "mihomo.exe", StringComparison.OrdinalIgnoreCase);
+                    if (ourMihomo && !MihomoProcess.IsOurs(pid))
+                    {
+                        try { using (var p = Process.GetProcessById(pid)) { p.Kill(); p.WaitForExit(3000); } } catch { }
+                        Logger.Write(LogLevel.Warn, "Stale mihomo.exe from a previous run held the tunnel port " + port + " (PID " + pid + ") - closed");
+                        continue;
+                    }
                     string who = path != "" ? Path.GetFileName(path) : "PID " + pid;
                     return Tx("Порт туннеля ") + port + Tx(" занят: ") + who + " (PID " + pid + Tx(") — закрой эту программу или поменяй TunnelSocksPort в config\\settings.ini");
                 }
@@ -144,6 +161,8 @@ namespace NetProbe
             var e = TunnelProto.Load(name);
             string miss = TunnelProto.Missing(e);
             if (miss != null) return Tx("Туннель «") + name + "»: " + miss;
+            if (e.Protocol == "awg") return StartAwg(st, name, e, lists);
+            awg = false;
             if (!File.Exists(XrayProcess.Exe(st))) return Tx("Не найден xray.exe — установите ядро на вкладке Subscriptions («Ядро xray»)");
             if (!File.Exists(SingBoxProcess.Exe(st))) return Tx("Не найден sing-box.exe — установите ядро TUN на вкладке Subscriptions («sing-box»)");
             // свои порты, чтобы не мешать xray подписок; DirectDomains / статистика здесь не нужны
@@ -163,6 +182,38 @@ namespace NetProbe
             err = sb.Start(cs, sbjson, "singbox-tunnel.json");
             if (err != null) { x.Stop(); return err; }
             TunnelName = name; StartedAt = DateTime.Now; stopping = false; runningXrayJson = xjson;
+            WriteRuntime(name, e, lists);
+            return null;
+        }
+
+        // AmneziaWG: mihomo (AWG outbound, socks with the per-run login on the tunnel port) + the same sing-box TUN
+        string StartAwg(Settings st, string name, ServerEntry e, TunLists lists)
+        {
+            // first AmneziaWG connection: get the core now (GitHub, MetaCubeX/mihomo), the same way xray is installed
+            string core = MihomoCore.Ensure(st);
+            if (core != null) return "AmneziaWG core (mihomo) could not be installed: " + core;
+            if (!File.Exists(SingBoxProcess.Exe(st))) return Tx("Не найден sing-box.exe — установите ядро TUN на вкладке Subscriptions («sing-box»)");
+            var cs = TunSettings(st);
+            cs.TunServerDomain = e.Address;
+            string sbjson;
+            try { sbjson = SingBoxConfig.Build(cs, lists, SingLog(st)); }
+            catch (Exception ex) { return "Invalid TUN routing configuration: " + ex.Message; }
+            string busy = FreePorts(st, new[] { cs.SocksPort });
+            if (busy != null) return busy;
+            RotateLogs(st);
+            string mjson = MihomoConfig.Build(cs, AwgConf.Parse(e.Awg));
+            string cfg = Path.Combine(Settings.Sub("runtime"), "mihomo-tunnel.yaml");
+            try { File.WriteAllText(cfg, mjson, new UTF8Encoding(false)); } catch (Exception ex) { return "mihomo config: " + ex.Message; }
+            string bad = MihomoProcess.Test(st, cfg);
+            if (bad != null) return bad;
+            awg = true;
+            string err = m.Start(st, mjson, cfg);
+            if (err != null) return err;
+            System.Threading.Thread.Sleep(400);
+            if (!m.Running) return "mihomo (AmneziaWG) stopped at once - check the tunnel config";
+            err = sb.Start(cs, sbjson, "singbox-tunnel.json");
+            if (err != null) { m.Stop(); return err; }
+            TunnelName = name; StartedAt = DateTime.Now; stopping = false; runningXrayJson = mjson;
             WriteRuntime(name, e, lists);
             return null;
         }
@@ -214,12 +265,13 @@ namespace NetProbe
         public bool TryRestartTun(Settings st, string name, TunLists lists, out string err)
         {
             err = null;
-            if (name != TunnelName || runningXrayJson == null || !x.Running) return false;
+            if (name != TunnelName || runningXrayJson == null || !(awg ? m.Running : x.Running)) return false;
             var e = TunnelProto.Load(name);
             if (e == null || TunnelProto.Missing(e) != null) return false;
+            if ((e.Protocol == "awg") != awg) return false;
             var cs = TunSettings(st);
             cs.TunServerDomain = e.Address;
-            if (TunXrayJson(st, cs, e) != runningXrayJson) return false;
+            if ((awg ? MihomoConfig.Build(cs, AwgConf.Parse(e.Awg)) : TunXrayJson(st, cs, e)) != runningXrayJson) return false;
             if (!File.Exists(SingBoxProcess.Exe(st))) return false;
             err = sb.Start(cs, SingBoxConfig.Build(cs, lists, SingLog(st)), "singbox-tunnel.json"); // Start сам останавливает прежний sing-box
             if (err != null) return true;
@@ -230,6 +282,7 @@ namespace NetProbe
         // диагностика: живы ли xray и sing-box, сколько у xray TCP-соединений с сервером туннеля
         public string Diag(Settings st)
         {
+            if (awg) return (m.Running ? "mihomo (AmneziaWG) PID " + m.Pid : "mihomo (AmneziaWG) is not running") + " · " + (sb.Running ? "sing-box OK" : Tr.Tx("sing-box не работает"));
             string xs = x.Running ? "xray PID " + x.Pid : Tr.Tx("xray не работает");
             string ss = sb.Running ? "sing-box OK" : Tr.Tx("sing-box не работает");
             int n = -1;
@@ -259,13 +312,15 @@ namespace NetProbe
             catch { }
         }
 
-        public void Attach(Process xp, Process sp, string name) { x.Attach(xp); sb.Attach(sp); TunnelName = name; StartedAt = DateTime.Now; runningXrayJson = null; }
+        public void Attach(Process xp, Process sp, string name) { awg = false; x.Attach(xp); sb.Attach(sp); TunnelName = name; StartedAt = DateTime.Now; runningXrayJson = null; }
+        public void AttachAwg(Process mp, Process sp, string name) { awg = true; m.Attach(mp); sb.Attach(sp); TunnelName = name; StartedAt = DateTime.Now; runningXrayJson = null; }
 
         public void Stop()
         {
             stopping = true; runningXrayJson = null;
             try { sb.Stop(); } catch { }
             try { x.Stop(); } catch { }
+            try { m.Stop(); } catch { }
             stopping = false;
         }
     }
@@ -367,13 +422,14 @@ namespace NetProbe
         public string TunnelName { get { return IsXray ? Xr.TunnelName : Wire.TunnelName; } }
         public DateTime StartedAt { get { return IsXray ? Xr.StartedAt : Wire.StartedAt; } }
         public int Pid { get { return IsXray ? Xr.Pid : Wire.Pid; } }
-        public string Engine { get { return IsXray ? "xray+TUN" : "WireSock"; } }
+        public string Engine { get { return IsXray ? (Xr.IsAwg ? "mihomo+TUN" : "xray+TUN") : "WireSock"; } }
 
         public string Start(Settings st, string tunnel, string config) { Stop(); IsXray = false; return Wire.Start(st, tunnel, config); }
         public string StartXray(Settings st, string tunnel, TunLists lists) { Stop(); IsXray = true; return Xr.Start(st, tunnel, lists); }
         public bool TryRestartTun(Settings st, string tunnel, TunLists lists, out string err) { err = null; return IsXray && Xr.TryRestartTun(st, tunnel, lists, out err); }
         public void Attach(Process p, string tunnel) { IsXray = false; Wire.Attach(p, tunnel); }
         public void AttachXray(Process xp, Process sp, string tunnel) { IsXray = true; Xr.Attach(xp, sp, tunnel); }
+        public void AttachAwg(Process mp, Process sp, string tunnel) { IsXray = true; Xr.AttachAwg(mp, sp, tunnel); }
         public void Stop() { Wire.Stop(); Xr.Stop(); }
     }
 }

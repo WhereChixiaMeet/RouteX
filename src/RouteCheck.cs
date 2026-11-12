@@ -141,7 +141,7 @@ namespace NetProbe
         static bool UsesProxy(string name) { return Browsers.Any(b => name.IndexOf(b, StringComparison.OrdinalIgnoreCase) >= 0); }
 
         // VLESS / VMess / Trojan туннель маршрутизатора: тот же порядок правил, что в SingBoxConfig.Build
-        static readonly string[] OwnProcs = { "xray.exe", "sing-box.exe", "netprobe-direct.exe", "wiresock-client.exe", "winws.exe" };
+        static readonly string[] OwnProcs = { "xray.exe", "mihomo.exe", "sing-box.exe", "netprobe-direct.exe", "wiresock-client.exe", "winws.exe" };
         RouteKind DecideXrayTunnel(string name, string path, IPAddress ip, string host, Func<IEnumerable<string>, bool> m, out string why)
         {
             if (OwnProcs.Any(o => string.Equals(o, name, StringComparison.OrdinalIgnoreCase))) { why = Tx("служебный процесс RouteX — напрямую"); return RouteKind.Direct; }

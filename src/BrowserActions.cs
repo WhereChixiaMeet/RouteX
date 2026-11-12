@@ -65,16 +65,18 @@ namespace NetProbe
                     Tunnels.Write(name,"[Interface]\r\nPrivateKey = \r\nAddress = \r\nMTU = 1420\r\n\r\n[Peer]\r\nPublicKey = \r\nEndpoint = \r\nAllowedIPs = 0.0.0.0/0, ::/0\r\nPersistentKeepalive = 25\r\n");FillTunnels(name);return new {selectedConfig=name};}
                 case "new-link-tunnel":NewTunnelFromLink();return new {selectedConfig=lbTun.SelectedItem};
                 case "config-from-link":{
-                    var entry=ServerEntry.Parse(BrowserString(args,"link"));if(entry==null)throw new ArgumentException("Invalid VLESS / VMess / Trojan link");
+                    // vpn:// (Amnezia) gives an AmneziaWG tunnel, the other links work as before
+                    string linkErr;var entry=TunnelProto.FromLink(BrowserString(args,"link"),out linkErr);if(entry==null)throw new ArgumentException(linkErr??"Invalid VLESS / VMess / Trojan link");
                     string name=BrowserString(args,"selectedConfig");
                     if(Tunnels.Exists(name)){
                         // "From link" on a WireGuard tunnel wrote <name>.json next to <name>.conf: the .conf wins, nothing changed and nothing was said
-                        if(!TunnelProto.IsXray(name))throw new ArgumentException("This tunnel is WireGuard. Use \"New tunnel from link\" for a VLESS / VMess / Trojan link.");
+                        if(!TunnelProto.IsXray(name))throw new ArgumentException("This tunnel is WireGuard. Use \"New tunnel from link\" for a VLESS / VMess / Trojan / vpn:// link.");
                     }else{
                         // a new tunnel never replaces an existing one with the same name
                         string wanted=Tunnels.Safe(entry.Name==""?"Imported config":entry.Name);if(wanted=="")wanted="Imported config";
                         name=wanted;int copy=2;while(Tunnels.Exists(name))name=wanted+" "+copy++;
                     }
+                    if(entry.Protocol=="awg"){Logger.Write(LogLevel.Info,"Tunnel \""+name+"\" added from an Amnezia key: AmneziaWG · "+entry.Endpoint);MihomoCore.EnsureAsync(st);}
                     TunnelProto.Save(name,entry);FillTunnels(name);LoadConnectUi();return new {selectedConfig=name};}
                 case "fill-config-link":{
                     string name=BrowserSelectedTunnel(args);lbTun.SelectedItem=name;XrFromLink(SafeClip());return null;}
@@ -195,11 +197,18 @@ namespace NetProbe
                 lbTun.SelectedItem=name;tbTunName.Text=renamed;RenameTunnel();return new {selectedConfig=renamed};
             }
             if(field=="protocol"){lbTun.SelectedItem=name;SwitchProto(text.ToLowerInvariant());return null;}
+            if(field=="raw"&&TunnelProto.IsAwg(name)){
+                // AmneziaWG: the same text editor; the AWG parameters stay as written
+                var awgEntry=TunnelProto.Load(name);string awgErr;
+                if(awgEntry==null||!AmneziaLink.SetText(awgEntry,text,out awgErr))throw new ArgumentException(awgEntry==null?"Unknown tunnel protocol":awgErr);
+                TunnelProto.Save(name,awgEntry);FillTunnels(name);LoadConnectUi();return null;
+            }
             if(field=="raw"){
                 if(TunnelProto.IsXray(name))throw new ArgumentException("Text editor is for WireGuard");
                 if(text.IndexOf("[Interface]",StringComparison.OrdinalIgnoreCase)<0||text.IndexOf("[Peer]",StringComparison.OrdinalIgnoreCase)<0)throw new ArgumentException("WireGuard requires [Interface] and [Peer]");Tunnels.Write(name,text);return null;
             }
             var entry=TunnelProto.Load(name);if(entry==null)throw new ArgumentException("Unknown tunnel protocol");
+            if(entry.Protocol=="awg")throw new ArgumentException("AmneziaWG tunnels are edited as text");
             var fields=new Dictionary<string,string>{{"address","Address"},{"port","Port"},{"uuid","UserId"},{"flow","Flow"},{"cipher","Method"},{"security","Security"},{"sni","Sni"},{"fingerprint","Fp"},{"publicKey","Pbk"},{"shortId","Sid"},{"network","Network"},{"path","Path"},{"host","Host"},{"alpn","Alpn"},{"spx","Spx"},{"xhttpMode","Mode"},{"insecure","Insecure"}};
             string property;if(!fields.TryGetValue(field,out property))throw new ArgumentException("Unknown config field");
             if(field=="port"){int port;if(!int.TryParse(text.Trim(),NumberStyles.Integer,CultureInfo.InvariantCulture,out port)||port<1||port>65535)throw new ArgumentException("Port must be a number from 1 to 65535");args["value"]=port;}

@@ -63,6 +63,7 @@ namespace NetProbe
             if (ActiveSource() == Source.None) return Tx("нет источника");
             string t = router.Active && router.OnBackup ? st.BackupTunnel : st.PrimaryTunnel;
             if (string.IsNullOrEmpty(t)) return Tx("туннель не выбран");
+            if (TunnelProto.IsAwg(t)) return "AMNEZIAWG · mihomo TUN";
             if (TunnelProto.IsXray(t)) { var e = TunnelProto.Load(t); return (e != null ? e.Transport.ToUpperInvariant().Replace("+", " · ") : TunnelProto.Names[TunnelProto.IndexOf(t)].ToUpperInvariant()) + " · xray TUN"; }
             return "WIREGUARD · WireSock";
         }
@@ -84,6 +85,7 @@ namespace NetProbe
             }
             switch ((proto ?? "").ToLowerInvariant())
             {
+                case "awg": return "AmneziaWG";
                 case "vless": return "VLESS";
                 case "vmess": return "VMess";
                 case "trojan": return "Trojan";

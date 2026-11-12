@@ -38,7 +38,7 @@ namespace NetProbe
         {
             var tt = Ui.Tip();
             var left = new CardPanel { Title = Tx("Туннели") };
-            lbTun = new ThemedList { RightText = n => (TunnelProto.IsXray(n) ? TunnelProto.Names[TunnelProto.IndexOf(n)] + (n == st.PrimaryTunnel || n == st.BackupTunnel ? " · " : "") : "") + (n == st.PrimaryTunnel ? Tx("основной") : n == st.BackupTunnel ? Tx("резервный") : "") };
+            lbTun = new ThemedList { RightText = n => (TunnelProto.IsXray(n) ? TunnelProto.Label(n) + (n == st.PrimaryTunnel || n == st.BackupTunnel ? " · " : "") : "") + (n == st.PrimaryTunnel ? Tx("основной") : n == st.BackupTunnel ? Tx("резервный") : "") };
             lbTun.SelectedIndexChanged += (s, e) => LoadTunnel();
             var bNew = IconBtn("", Tx("Новый"), tt);
             bNew.Click += (s, e) =>
@@ -112,7 +112,7 @@ namespace NetProbe
             FlushTunnel(); if (xrSave.Enabled) { xrSave.Stop(); SaveXr(); }
             var n = lbTun.SelectedItem; if (n == null) return;
             loadingTun = true;
-            try { tbTunName.Text = n; tbTunText.Text = TunnelProto.IsXray(n) ? "" : Tunnels.Read(n).Replace("\r\n", "\n").Replace("\n", "\r\n"); } finally { loadingTun = false; }
+            try { tbTunName.Text = n; tbTunText.Text = TunnelProto.IsAwg(n) ? (TunnelProto.Load(n)?.Awg ?? "") : TunnelProto.IsXray(n) ? "" : Tunnels.Read(n).Replace("\r\n", "\n").Replace("\n", "\r\n"); } finally { loadingTun = false; }
             lTunInfo.Text = Tunnels.Endpoint(n);
             ShowProtoEditor(n);
         }
@@ -120,7 +120,17 @@ namespace NetProbe
         // Конфиг сохраняется сам через секунду после правки
         void SaveTunnel()
         {
-            var n = lbTun.SelectedItem; if (n == null || TunnelProto.IsXray(n)) return;
+            var n = lbTun.SelectedItem; if (n == null) return;
+            if (TunnelProto.IsAwg(n))
+            {
+                var ae = TunnelProto.Load(n); string aerr;
+                if (ae == null || !AmneziaLink.SetText(ae, tbTunText.Text, out aerr)) { lTunInfo.Text = ae == null ? "?" : aerr; return; }
+                TunnelProto.Save(n, ae);
+                lTunInfo.Text = Tx("Сохранено") + " · " + Tunnels.Endpoint(n);
+                if (router.Active && (n == st.PrimaryTunnel || n == st.BackupTunnel)) router.Reapply();
+                return;
+            }
+            if (TunnelProto.IsXray(n)) return;
             string text = tbTunText.Text;
             if (text.IndexOf("[Interface]", StringComparison.OrdinalIgnoreCase) < 0 || text.IndexOf("[Peer]", StringComparison.OrdinalIgnoreCase) < 0) { lTunInfo.Text = Tx("Нужны секции [Interface] и [Peer]"); return; }
             Tunnels.Write(n, text);

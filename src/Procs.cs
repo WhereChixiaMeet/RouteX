@@ -211,7 +211,7 @@ namespace NetProbe
         static bool OwnCore(string p)
         {
             string f = Path.GetFileName(p);
-            if (new[] { "wiresock-client.exe", "xray.exe", "sing-box.exe", "winws.exe" }.Contains(f, StringComparer.OrdinalIgnoreCase)) return true;
+            if (new[] { "wiresock-client.exe", "xray.exe", "mihomo.exe", "sing-box.exe", "winws.exe" }.Contains(f, StringComparer.OrdinalIgnoreCase)) return true;
             try { return string.Equals(Path.GetFullPath(p), Path.GetFullPath(System.Windows.Forms.Application.ExecutablePath), StringComparison.OrdinalIgnoreCase); } catch { return false; }
         }
 

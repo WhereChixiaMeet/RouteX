@@ -106,6 +106,12 @@ namespace NetProbe
         {
             var e = TunnelProto.Load(name);
             bool wg = !TunnelProto.IsXray(name);
+            if (!wg && e != null && e.Protocol == "awg")
+                return new {
+                    id=name,name,protocol="AmneziaWG",transport="UDP",endpoint=e.Endpoint,
+                    address=e.Address,port=e.Port,uuid="",flow="",cipher="auto",security="none",sni="",fingerprint="",publicKey="",shortId="",
+                    network="udp",path="",host="",alpn="",spx="",xhttpMode="auto",insecure=false,raw=e.Awg
+                };
             return new {
                 id=name,name,protocol=wg?"WireGuard":(e?.Protocol??"vless").ToUpperInvariant(),
                 transport=wg?"UDP":((e?.Security??"none").ToUpperInvariant()+" · "+(e?.Network??"tcp").ToUpperInvariant()),endpoint=wg?Tunnels.Endpoint(name):e?.Endpoint,

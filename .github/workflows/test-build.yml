@@ -24,6 +24,21 @@ jobs:
         shell: bash
         run: node -e "const s=require('fs').readFileSync('src/WebUi/interface.html','utf8');for(const m of s.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g))new Function(m[1].replace('ROUTEX_HOST_INITIAL_JSON','{}'));console.log('interface script parses')"
 
+      - name: AmneziaWG self-test
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath .\RouteX.exe -ArgumentList '--awgtest', "$PWD\awgtest.txt" -PassThru
+          if (-not $p.WaitForExit(60000)) { $p.Kill(); throw 'awgtest timed out' }
+          Get-Content awgtest.txt
+          if (-not (Select-String -Path awgtest.txt -Pattern 'AWG-SELFTEST: OK' -Quiet)) { throw 'AmneziaWG self-test failed' }
+          # the generated config must be accepted by the real Windows mihomo
+          Invoke-WebRequest -Uri https://github.com/MetaCubeX/mihomo/releases/download/v1.19.34/mihomo-windows-amd64-v1-v1.19.34.zip -OutFile mihomo.zip
+          Expand-Archive mihomo.zip -DestinationPath mihomo-ci
+          $exe = Get-ChildItem mihomo-ci -Filter *.exe | Select-Object -First 1
+          New-Item -ItemType Directory -Force mihomo-home | Out-Null
+          & $exe.FullName -t -d "$PWD\mihomo-home" -f "$PWD\awgtest.txt.mihomo.yaml"
+          if ($LASTEXITCODE -ne 0) { throw 'mihomo rejected the AmneziaWG config' }
+
       - uses: actions/upload-artifact@v4
         with:
           name: RouteX-test

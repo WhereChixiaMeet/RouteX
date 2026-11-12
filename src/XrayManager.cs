@@ -192,7 +192,7 @@ namespace NetProbe
                     foreach (var p in System.Diagnostics.Process.GetProcessesByName(name))
                     {
                         string path = ProcInfo.ImagePath(p.Id);
-                        if (path == "" || (!path.StartsWith(st.XrayPath, StringComparison.OrdinalIgnoreCase) && !path.StartsWith(st.SingBoxPath, StringComparison.OrdinalIgnoreCase)))
+                        if (path == "" || (!path.StartsWith(st.XrayPath, StringComparison.OrdinalIgnoreCase) && !path.StartsWith(st.SingBoxPath, StringComparison.OrdinalIgnoreCase) && !path.StartsWith(st.MihomoPath, StringComparison.OrdinalIgnoreCase)))
                             if (!l.Contains(name)) l.Add(name);
                         p.Dispose();
                     }
