@@ -65,7 +65,7 @@ namespace NetProbe
             var bPrim = new FlatButton(Tx("Основной")) { Glyph = "" }.AutoW();
             bPrim.Click += (s, e) => { var n = lbTun.SelectedItem; if (n == null) return; FlushTunnel(); st.PrimaryTunnel = n; st.Save(); lbTun.Invalidate(); LoadConnectUi(); if (router.Active) router.Reapply(); };
             var bBack = new FlatButton(Tx("Резервный")) { Glyph = "" }.AutoW();
-            bBack.Click += (s, e) => { var n = lbTun.SelectedItem; if (n == null) return; FlushTunnel(); st.BackupTunnel = n; st.BackupEnabled = true; st.Save(); lbTun.Invalidate(); LoadConnectUi(); };
+            bBack.Click += (s, e) => { var n = lbTun.SelectedItem; if (n == null) return; if (string.Equals(n, st.PrimaryTunnel, StringComparison.OrdinalIgnoreCase)) { lTunInfo.Text = "The backup config must differ from the primary one"; return; } FlushTunnel(); st.BackupTunnel = n; st.BackupEnabled = true; st.Save(); lbTun.Invalidate(); LoadConnectUi(); };
             lTunInfo = new Label { AutoSize = false, Font = Theme.Small, ForeColor = Theme.Muted, BackColor = Theme.Card, UseMnemonic = false, TextAlign = ContentAlignment.MiddleRight };
             ed.Controls.AddRange(new Control[] { lName, tbTunName, tbTunText, bPrim, bBack, lTunInfo });
             BuildProtoUi(ed, tt);

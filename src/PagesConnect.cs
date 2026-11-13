@@ -170,7 +170,7 @@ namespace NetProbe
             tgBackup = new Toggle();
             tgBackup.Changed += (s, e) => { if (loadingConnect) return; st.BackupEnabled = tgBackup.On; st.Save(); Logger.Write(LogLevel.Info, Tx("Резервный VPN ") + (st.BackupEnabled ? Tx("включён") : Tx("выключен"))); LoadConnectUi(); };
             cbBackup = new DarkCombo();
-            cbBackup.SelectedIndexChanged += (s, e) => { if (loadingConnect) return; st.BackupTunnel = cbBackup.SelectedItem as string ?? ""; st.Save(); };
+            cbBackup.SelectedIndexChanged += (s, e) => { if (loadingConnect) return; st.BackupTunnel = cbBackup.SelectedItem as string ?? ""; if (st.BackupTunnel != "" && st.BackupTunnel != st.PrimaryTunnel) { st.BackupEnabled = true; tgBackup.On = true; nRetry.Enabled = true; } st.Save(); };
             cBack.Controls.AddRange(new Control[] { tgBackup, cbBackup });
 
             // --- аварийное переключение: одна компактная строка ---
@@ -440,7 +440,7 @@ namespace NetProbe
                 cbPrimary.SelectedItem = names.Contains(st.PrimaryTunnel) ? st.PrimaryTunnel : null;
                 cbBackup.SelectedItem = names.Contains(st.BackupTunnel) ? st.BackupTunnel : null;
                 tgBackup.On = st.BackupEnabled;
-                cbBackup.Enabled = st.BackupEnabled; nRetry.Enabled = st.BackupEnabled;
+                cbBackup.Enabled = true; nRetry.Enabled = st.BackupEnabled; // 5.1.2: choosing a backup config is always possible
                 nFailover.Value = st.FailoverSec; nRecover.Value = st.RecoverSec; nRetry.Value = st.RetryPrimaryMin;
                 cKill.Checked = st.KillSwitch; cDnsTun.Checked = st.DnsViaTunnel; cAutoConnect.Checked = st.AutoConnect;
                 SetupListCards();

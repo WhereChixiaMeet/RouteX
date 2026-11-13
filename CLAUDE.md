@@ -143,3 +143,6 @@ Auto-connect on start and Windows autostart (Task Scheduler, highest privileges,
 ## 5.1.1
 - mihomo (AmneziaWG core) is part of the component updates: `CheckUpdates` checks it together with xray / sing-box (switch `UpdXray`; only when it is installed), tray notification and the Settings badge include it, Settings → Updates has the row "mihomo (AmneziaWG)" in both interfaces (`lMVer`, `UpdateMihomoUi`, web action `check-update:mihomo`).
 - `Updater.UpdateMihomo` keeps the previous build as `mihomo\mihomo.exe.old`; a new build that does not start (`mihomo -v` gives nothing) is rolled back at once. A running AmneziaWG tunnel is stopped only for the file replacement and connected again.
+
+## 5.1.2
+- Backup config: web setting `backupConfig` has its own handler in `BrowserSettings` (not locked while connected; a config sets `BackupEnabled = true`, `""` = "None" turns it off; must differ from the primary). Setting `PrimaryTunnel` to the backup tunnel clears the backup. The web combo is never disabled and lists "None" + every tunnel except the primary. Classic UI: `cbBackup` always enabled, choosing a config turns the backup on.

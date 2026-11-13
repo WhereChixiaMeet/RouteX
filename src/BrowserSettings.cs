@@ -198,12 +198,24 @@ namespace NetProbe
             else if(key=="logRetention")next.LogRetention=Choice(value,"1 hour","1 day","1 week","1 month");
             else if(key=="notifyEvery")next.AppNotifyEvery=Choice(value,"Immediately","Day","Week","Month");
             else if(key=="coreUpdateEvery")next.UpdEvery=Choice(value,"At startup","Every 6 hours","Every 12 hours","Daily","Weekly");
+            // 5.1.2: the backup config can be chosen at any time, also while connected (it is used only at the next
+            // failover); a config turns the backup on, "None" ("") turns it off. Before, the selector was greyed out
+            // until a separate "Backup VPN" switch was found, and the Backup button of Tunnel Configs did not enable it.
+            else if(key=="backupConfig"){
+                string b=Convert.ToString(value)??"";
+                if(b!=""&&!Tunnels.Exists(b))throw new ArgumentException("Unknown tunnel");
+                if(b!=""&&string.Equals(b,next.PrimaryTunnel,StringComparison.OrdinalIgnoreCase))throw new ArgumentException("The backup config must differ from the primary one");
+                next.BackupTunnel=b;next.BackupEnabled=b!="";
+                Logger.Write(LogLevel.Info,b!=""?"Backup VPN: \""+b+"\"":"Backup VPN off");
+            }
             else if(BrowserFields.TryGetValue(key,out field)){
                 var property=typeof(Settings).GetField(field,BindingFlags.Public|BindingFlags.Instance);
                 if(property==null)throw new ArgumentException("Unsupported setting: "+key);
-                if(new[]{"TunStack","TunBlockIpv6","DnsViaTunnel","BypassRu","PrimaryTunnel","BackupTunnel"}.Contains(field)&&TunSettingsLocked)throw new InvalidOperationException(TunLockMessage);
+                if(new[]{"TunStack","TunBlockIpv6","DnsViaTunnel","BypassRu","PrimaryTunnel"}.Contains(field)&&TunSettingsLocked)throw new InvalidOperationException(TunLockMessage);
                 if((field=="PrimaryTunnel"||field=="BackupTunnel")&&!Tunnels.Exists(Convert.ToString(value)))throw new ArgumentException("Unknown tunnel");
                 property.SetValue(next,Convert.ChangeType(value,property.FieldType,CultureInfo.InvariantCulture));
+                // a new primary that was the backup: the backup would be the same tunnel, so it is cleared
+                if(field=="PrimaryTunnel"&&string.Equals(next.BackupTunnel,next.PrimaryTunnel,StringComparison.OrdinalIgnoreCase)){next.BackupTunnel="";next.BackupEnabled=false;}
             }else throw new ArgumentException("Unknown setting: "+key);
             if(key=="theme"||key=="accent"||key=="resetPalette"||key.StartsWith("palette.")){
                 next.Clamp();st.CopyFrom(next);st.Save();Theme.AccentColor=Theme.ParseColor(st.Accent);Theme.Apply((ThemeKind)st.Theme);
